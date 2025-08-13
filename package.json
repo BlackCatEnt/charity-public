@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node bot/index.js",
+    "start": "node data/index.js",
     "index-kb": "node scripts/index_kb.js"
   },
   "dependencies": {

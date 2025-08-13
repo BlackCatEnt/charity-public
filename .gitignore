@@ -1,2 +1,20 @@
 # Ignore environment variables
 .env
+*.env
+
+# Ignore token storage
+data/token.json
+
+#Ignore logs and temp files
+logs/
+*.log
+*.tmp
+
+#Ignore node_modules and build artifacts
+node_modules/
+dist/
+build/
+
+# Ignore OS / editor junk
+.DS_Store
+Thumbs.db
