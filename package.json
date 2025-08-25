@@ -1,17 +1,28 @@
 {
-  "name": "twitch-rag-bot",
-  "version": "0.1.4",
+  "name": "Charity-The-Adventurer",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node data/index.js",
-    "index-kb": "node scripts/index_kb.js"
+    "index-kb": "node scripts/index_kb.js",
+    "reindex-kb": "node tools/reindex_kb.js ./docs"
   },
   "dependencies": {
-    "axios": "^1.7.2",
+    "better-sqlite3": "^12.2.0",
     "chokidar": "^3.6.0",
     "dotenv": "^16.4.5",
+    "onnxruntime-node": "^1.22.0-rev",
+    "openai": "^5.15.0",
     "tmi.js": "^1.8.5",
+    "tokenizers": "^0.13.3",
+    "tokenizers-win32-x64-msvc": "^0.13.4-rc1",
     "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "axios": "^1.11.0"
+  },
+  "imports": {
+    "#embeddings": "./modular_phase2/modules/embeddings.js"
   }
 }

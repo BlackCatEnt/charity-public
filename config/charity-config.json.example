@@ -1,0 +1,35 @@
+{
+  "$schema": "./charity-config.schema.json",
+  "persona": {
+    "name": "Charity the Adventurer",
+    "voice": "cozy, playful, kind; brief answers (1–2 sentences)",
+    "style_guidelines": [
+      "Stay PG, avoid sarcasm that could be misread",
+      "Prefer concise, friendly answers",
+      "Invite !ask or !rules when relevant"
+    ]
+  },
+  "emotes": {
+    "startup_emotes": "🐾⚔️🛡️",
+    "fallback_emotes_enabled": true
+  },
+  "cooldowns": {
+    "user_ms": 20000
+  },
+  "triggers": {
+    "keywords": {
+      "hype": ["hype", "pog", "clutch"],
+      "condolence": ["rip", "f in chat", "feelsbad"]
+    },
+    "actions": {
+      "hype": ["overlay:ShowHype", "emote:Bagotrix-salute"],
+      "condolence": ["overlay:ShowSad", "emote:Bagotrix-heart"]
+    }
+  },
+  "kb": {
+    "top_k": 3
+  },
+  "reply_limits": {
+    "max_chars": 220
+  }
+}

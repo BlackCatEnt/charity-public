@@ -1,221 +1,159 @@
-# check-bot-status.ps1 — Health check for twitch-bot-charity (Windows, ASCII-only)
+<#  check-bot-status.ps1  - Full diagnostics for Charity (PM2), PS 5.1 safe
 
-$ErrorActionPreference = 'SilentlyContinue'
+Usage:
+  .\check-bot-status.ps1
+  .\check-bot-status.ps1 -AutoStart
+  .\check-bot-status.ps1 -RestartIfOutdated
+  .\check-bot-status.ps1 -LogLines 50
+#>
 
-function Write-Ok   ($m){ Write-Host "[ OK ] $m"   -ForegroundColor Green }
-function Write-Warn ($m){ Write-Host "[WARN] $m"   -ForegroundColor Yellow }
-function Write-Err  ($m){ Write-Host "[FAIL] $m"   -ForegroundColor Red }
-function Write-Sec  ($m){ Write-Host ""; Write-Host "=== $m ===" -ForegroundColor Cyan }
+[CmdletBinding()]
+param(
+  [switch]$AutoStart,
+  [switch]$RestartIfOutdated,
+  [int]$LogLines = 20
+)
 
-# -------- Config --------
-$AppRoot = 'C:\twitch-bot\Charity'
-$EnvPaths = @("$AppRoot\.env", "$AppRoot\data\.env")
-$ProcName = 'twitch-bot-charity'
-$ServiceName = 'PM2'
-$KbIndex = Join-Path $AppRoot 'data\kb_index.json'
-$TokenFile = Join-Path $AppRoot 'data\token.json'
+# --- Config ---
+$Root      = "C:\twitch-bot\Charity"
+$ScriptRel = "data\index.js"
+$Name      = "charity"
+$EnvPath   = Join-Path $Root ".env"
+$KbPath    = Join-Path $Root "data\kb_index.json"
+$TokenPath = Join-Path $Root "data\token_state.json"
 
-$fail = 0; $warn = 0
+function Write-Title($t) { Write-Host ""; Write-Host "=== $t ===" -ForegroundColor Cyan }
+function Short-Duration([TimeSpan]$ts) {
+  if ($ts.TotalDays -ge 1) { "{0}d {1}h {2}m" -f [int]$ts.TotalDays, $ts.Hours, $ts.Minutes }
+  elseif ($ts.TotalHours -ge 1) { "{0}h {1}m {2}s" -f [int]$ts.TotalHours, $ts.Minutes, $ts.Seconds }
+  else { "{0}m {1}s" -f $ts.Minutes, $ts.Seconds }
+}
+function Def($v, $alt) { if ($null -eq $v -or "$v" -eq "") { $alt } else { $v } }
 
-# -------- Helpers --------
-function Get-FirstExistingFile([string[]]$paths){
-  foreach($p in $paths){ if(Test-Path $p){ return $p } }
+Set-Location $Root
+
+if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+  Write-Error "PM2 not found on PATH."
+  exit 1
+}
+
+# Quick presence check
+$exists = (pm2 list | Select-String -SimpleMatch $Name) -ne $null
+if (-not $exists -and $AutoStart) {
+  Write-Host "Process '$Name' not registered. Starting..." -ForegroundColor Yellow
+  pm2 start $ScriptRel --name $Name --update-env | Out-Null
+  Start-Sleep -Seconds 2
+}
+
+Write-Title "Charity Process Status"
+
+# Use 'pm2 show' to avoid ConvertFrom-Json duplicate-key issues
+$show = pm2 show $Name 2>$null
+if (-not $show) {
+  Write-Host "X '$Name' not found in PM2." -ForegroundColor Red
+  exit 1
+}
+
+# Extract a value from a line like: " status  │ online "
+# Split on [ |, U+2502 (box vertical), U+00A6 (broken bar) ] to avoid encoding troubles
+function Get-ShowVal([string]$label) {
+  $pattern = "^\s*" + [regex]::Escape($label) + "\s*[\|\u2502\u00A6]"
+  $line = $show | Select-String -Pattern $pattern
+  if ($line) {
+    $clean = ($line -replace '^\s+', '')
+    $parts = [regex]::Split($clean, '[\|\u2502\u00A6]')
+    if ($parts.Length -ge 2) { return ($parts[1].Trim()) }
+  }
   return $null
 }
 
-function Get-EnvVal([string]$key){
-  $path = Get-FirstExistingFile $EnvPaths
-  if($path){
-    $line = (Select-String -Path $path -Pattern ("^$key=") -ErrorAction SilentlyContinue | Select-Object -First 1).Line
-    if($line){
-      return @{
-        source = "env:$([System.IO.Path]::GetFileName($path))"
-        value  = ($line -replace "^$key=",'').Trim()
-      }
-    }
-  }
-  return @{ source="env:missing"; value=$null }
+$status     = Get-ShowVal 'status'
+$pm2Id      = Get-ShowVal 'id'
+$pm2Pid     = Get-ShowVal 'pid'          # (avoid $PID)
+$restarts   = Get-ShowVal 'restarts'
+$uptimeText = Get-ShowVal 'uptime'
+$cpu        = Get-ShowVal 'cpu'
+$mem        = Get-ShowVal 'memory'
+$scriptPath = Get-ShowVal 'script path'
+
+"{0,-12} {1}" -f "Status:",   (Def $status "unknown")
+"{0,-12} {1}" -f "PM2 ID:",   (Def $pm2Id "unknown")
+"{0,-12} {1}" -f "PID:",      (Def $pm2Pid "unknown")
+"{0,-12} {1}" -f "Uptime:",   (Def $uptimeText "-")
+"{0,-12} {1}" -f "Restarts:", (Def $restarts "0")
+"{0,-12} {1}" -f "CPU:",      (Def $cpu "-")
+"{0,-12} {1}" -f "Memory:",   (Def $mem "-")
+"{0,-12} {1}" -f "Script:",   (Def $scriptPath "-")
+
+# --- Staleness checks ---
+Write-Title "Staleness Checks"
+$scriptFull = Join-Path $Root $ScriptRel
+$envInfo    = Get-Item $EnvPath -ErrorAction SilentlyContinue
+$codeInfo   = Get-Item $scriptFull -ErrorAction SilentlyContinue
+
+if ($envInfo)  { "{0,-20} {1}" -f ".env last write:",     $envInfo.LastWriteTime } else { Write-Host "Warning: .env not found at $EnvPath" -ForegroundColor Yellow }
+if ($codeInfo) { "{0,-20} {1}" -f "index.js last write:", $codeInfo.LastWriteTime }
+
+$needsRestart = $false
+if ((Def $status "") -eq "online") {
+  $recentCutoff = (Get-Date).AddMinutes(-10)
+  if ($envInfo  -and $envInfo.LastWriteTime  -gt $recentCutoff) { Write-Host ".env changed recently -> consider: pm2 restart $Name --update-env" -ForegroundColor Yellow; $needsRestart = $true }
+  if ($codeInfo -and $codeInfo.LastWriteTime -gt $recentCutoff) { Write-Host "index.js changed recently -> consider: pm2 restart $Name --update-env" -ForegroundColor Yellow; $needsRestart = $true }
 }
 
-function Get-TokenJson(){
-  if(Test-Path $TokenFile){
-    try {
-      $obj = Get-Content $TokenFile -Raw | ConvertFrom-Json
-      return $obj
-    } catch {}
-  }
-  return $null
+if ($RestartIfOutdated -and $needsRestart -and ((Def $status "") -eq "online")) {
+  Write-Host "Restarting '$Name' to load latest env/code..." -ForegroundColor Yellow
+  pm2 restart $Name --update-env | Out-Null
+  Start-Sleep -Seconds 2
+  $show    = pm2 show $Name
+  $status  = Get-ShowVal 'status'
+  Write-Host "New status: $status"
 }
 
-function Validate-Token([string]$access){
-  if(-not $access){ return @{ ok=$false; error="empty_token" } }
-  try{
-    $raw = (curl.exe -s -H "Authorization: OAuth $access" https://id.twitch.tv/oauth2/validate) | Out-String
-    if(-not $raw){ return @{ ok=$false; error="empty_response" } }
-    $j = $raw | ConvertFrom-Json
-    if(-not $j){ return @{ ok=$false; error="json_parse_failed" } }
-    return @{
-      ok = $true
-      login = $j.login
-      client_id = $j.client_id
-      scopes = @($j.scopes)
-      expires_in = [int]$j.expires_in
-      minutes = [int]([double]$j.expires_in/60)
-      expires_at = (Get-Date).AddSeconds([int]$j.expires_in).ToString("o")
-    }
-  } catch {
-    return @{ ok=$false; error=$_.Exception.Message }
-  }
-}
-
-# -------- Service & PM2 --------
-Write-Sec "Service & PM2"
-
-# Detect common PM2 service names (prefer the configured $ServiceName but fall back to common aliases)
-$svcCandidates = @($ServiceName,'pm2','PM2Service','PM2-Startup') | Select-Object -Unique
-$svcFound = $null
-foreach($n in $svcCandidates){
-  $s = Get-Service -Name $n -ErrorAction SilentlyContinue
-  if($s){ $svcFound = $s; break }
-}
-
-if($svcFound){
-  if($svcFound.Status -eq 'Running'){
-    Write-Ok ("Windows service '{0}' is running." -f $svcFound.Name)
-  } else {
-    Write-Err ("Windows service '{0}' is {1}." -f $svcFound.Name,$svcFound.Status); $fail++
-  }
-} else {
-  Write-Warn "No PM2 Windows service installed (optional; used for auto-start at boot)."
-}
-
-if(Get-Command pm2 -ErrorAction SilentlyContinue){
-  Write-Ok "pm2 is on PATH."
-} else {
-  Write-Err "pm2 not found on PATH. Try: npm i -g pm2"; $fail++
-}
-
-# PM2 process status (robust with fallbacks to avoid ConvertFrom-Json duplicate-keys bug)
-$pm2Ok = $false
-try {
-  $jsonText = pm2 jlist | Out-String
+# --- KB index status ---
+Write-Title "KB Index"
+if (Test-Path $KbPath) {
   try {
-    $list = $jsonText | ConvertFrom-Json
-    $proc = $list | Where-Object { $_.name -eq $ProcName } | Select-Object -First 1
-    if($proc -and $proc.pm2_env.status -eq 'online'){ $pm2Ok = $true }
+    $kb = Get-Content $KbPath -Raw | ConvertFrom-Json
+    $count = ($kb.docs | Measure-Object).Count
+    "kb_index.json: present, docs: $count"
   } catch {
-    # Fallback 1: smaller JSON for this process only
-    $desc = (pm2 describe $ProcName --json) 2>$null | Out-String
-    if($desc -match '"status"\s*:\s*"online"'){ $pm2Ok = $true }
-    elseif(-not $desc){
-      # Fallback 2: plain table
-      $stat = (pm2 status $ProcName) 2>$null
-      if($stat -match '\bonline\b'){ $pm2Ok = $true }
-    }
+    Write-Host "kb_index.json present but unreadable (invalid JSON?)" -ForegroundColor Yellow
   }
-} catch {
-  $stat = (pm2 status $ProcName) 2>$null
-  if($stat -match '\bonline\b'){ $pm2Ok = $true }
-}
-
-if($pm2Ok){
-  Write-Ok "PM2 process '$ProcName' is online."
 } else {
-  Write-Err "PM2 process '$ProcName' not online. (pm2 start .\data\index.js --name $ProcName)"; $fail++
+  Write-Host "kb_index.json not found. To build: npm run index-kb" -ForegroundColor Yellow
 }
 
-# -------- .env and token.json --------
-Write-Sec ".env and token.json"
-$envPath = Get-FirstExistingFile $EnvPaths
-if($envPath){ Write-Ok ".env found at $envPath" } else { Write-Err ".env not found at $($EnvPaths -join ', ')" ; $fail++ }
-
-$need = @('TWITCH_CHANNEL','TWITCH_BOT_USERNAME','TWITCH_OAUTH','TWITCH_CLIENT_ID','TWITCH_CLIENT_SECRET')
-$present = @{}
-foreach($k in $need){
-  $kv = Get-EnvVal $k
-  if($kv.value){
-    $present[$k] = $kv
-    Write-Ok "$k present ($($kv.source))"
-  }else{
-    $present[$k] = @{source='env:missing'; value=$null}
-    Write-Warn "$k missing in env"
-    $warn++
-  }
-}
-
-# Look in token.json for fallbacks
-$tokJson = Get-TokenJson
-if($tokJson){
-  if(-not $present['TWITCH_OAUTH'].value -and $tokJson.access_token){
-    Write-Ok "Found access token in token.json"
-    $present['TWITCH_OAUTH'] = @{ source='token.json'; value = ($tokJson.access_token -replace '^oauth:','') }
-  }
-  if(-not $present['TWITCH_CLIENT_ID'].value -and $tokJson.client_id){
-    Write-Ok "Found client_id in token.json"
-    $present['TWITCH_CLIENT_ID'] = @{ source='token.json'; value = $tokJson.client_id }
-  }
-  if(-not $present['TWITCH_CLIENT_SECRET'].value -and $tokJson.client_secret){
-    Write-Ok "Found client_secret in token.json"
-    $present['TWITCH_CLIENT_SECRET'] = @{ source='token.json'; value = $tokJson.client_secret }
-  }
-  if($tokJson.refresh_token){
-    Write-Ok "Refresh token present in token.json"
-  }
-}else{
-  Write-Warn "token.json not found or unreadable at $TokenFile"
-}
-
-# If client id/secret still missing anywhere, escalate from WARN to FAIL (refresh needs them)
-if(-not $present['TWITCH_CLIENT_ID'].value){ Write-Err "TWITCH_CLIENT_ID missing (not in env or token.json)"; $fail++; $warn = [Math]::Max(0,$warn-1) }
-if(-not $present['TWITCH_CLIENT_SECRET'].value){ Write-Err "TWITCH_CLIENT_SECRET missing (not in env or token.json)"; $fail++; $warn = [Math]::Max(0,$warn-1) }
-
-# -------- Token validate --------
-Write-Sec "Token validate (expires/scopes)"
-$access = $present['TWITCH_OAUTH'].value
-if($access){
-  $v = Validate-Token $access
-  if($v.ok){
-    Write-Ok ("Token valid for ~{0} min. Login: {1}" -f $v.minutes, ($v.login | ForEach-Object { $_ } ))
-    if(($v.scopes -contains 'chat:read') -and ($v.scopes -contains 'chat:edit')){
-      Write-Ok "Scopes OK: chat:read, chat:edit"
-    } else {
-      Write-Err "Missing required IRC scopes (need chat:read and chat:edit)."; $fail++
-      Write-Host ("Scopes: " + (($v.scopes -join ', '))) -ForegroundColor DarkYellow
+# --- Token status ---
+Write-Title "Token Status"
+if (Test-Path $TokenPath) {
+  try {
+    $tok = Get-Content $TokenPath -Raw | ConvertFrom-Json
+    $mins = $null
+    if ($tok.expires_at) {
+      $expiresAt = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$tok.expires_at).UtcDateTime
+      $mins = [math]::Round(($expiresAt - (Get-Date).ToUniversalTime()).TotalMinutes)
     }
-    if($v.minutes -le 60){ Write-Warn "Token expires in 60 minutes or less."; $warn++ }
-  }else{
-    Write-Err ("Token validate failed: {0}" -f $v.error); $fail++
+    "{0,-20} {1}" -f "Has access token:",  ([bool]$tok.access_token)
+    "{0,-20} {1}" -f "Has refresh token:", ([bool]$tok.refresh_token)
+    if ($mins -ne $null) { "{0,-20} ~{1} min" -f "Minutes remaining:", $mins }
+    if ($tok.last_refresh_attempt) {
+      $lastRef = [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$tok.last_refresh_attempt).UtcDateTime
+      "{0,-20} {1}" -f "Last refresh try:", $lastRef
+    }
+  } catch {
+    Write-Host "Unable to read token_state.json" -ForegroundColor Yellow
   }
-}else{
-  Write-Err "No access token found in env or token.json"; $fail++
+} else {
+  Write-Host "token_state.json not found yet." -ForegroundColor Yellow
 }
 
-# -------- Network test --------
-Write-Sec "Network test (id.twitch.tv:443)"
-try{
-  $tnc = Test-NetConnection -ComputerName id.twitch.tv -Port 443
-  if($tnc.TcpTestSucceeded){ Write-Ok "Outbound 443 reachable to id.twitch.tv" }
-  else { Write-Err "Cannot reach id.twitch.tv:443 (check firewall/proxy)"; $fail++ }
-}catch{
-  Write-Warn ("Test-NetConnection failed: {0}" -f $_.Exception.Message); $warn++
+# --- Final Status and Logs ---
+Write-Title "Final Status and Logs"
+"{0,-12} {1}" -f "Online:", (((Def $status "") -eq "online"))
+if (((Def $status "") -ne "online") -and $AutoStart) {
+  Write-Host "Attempting to (re)start '$Name'..." -ForegroundColor Yellow
+  pm2 start $ScriptRel --name $Name --update-env | Out-Null
 }
 
-# -------- KB presence --------
-Write-Sec "KB index presence (for !ask)"
-if(Test-Path $KbIndex){ Write-Ok "KB index found: $KbIndex" }
-else { Write-Warn "KB index missing. Run: npm run index-kb"; $warn++ }
-
-# -------- Summary --------
-Write-Sec "Summary"
-if($fail -eq 0 -and $warn -eq 0){
-  Write-Host "All checks passed." -ForegroundColor Green
-}elseif($fail -eq 0){
-  Write-Host ("{0} warning(s), no failures." -f $warn) -ForegroundColor Yellow
-}else{
-  Write-Host ("{0} failure(s), {1} warning(s). See items marked [FAIL]." -f $fail, $warn) -ForegroundColor Red
-}
-
-Write-Host ""
-Write-Host "Tip: In chat, test: !rules   |   Mods/Broadcaster: !tokenstatus" -ForegroundColor DarkCyan
-Write-Host "Press any key to close..."
-[void][System.Console]::ReadKey($true)
+pm2 logs $Name --lines $LogLines
