@@ -1,0 +1,525 @@
+{
+  "users": {
+    "93777590": {
+      "id": "93777590",
+      "aliases": [],
+      "name": "BagOTrix",
+      "firstSeen": 1755838656277,
+      "lastSeen": 1756044769670,
+      "seenCount": 50,
+      "privacy": {
+        "optOut": false
+      },
+      "likes": {
+        "rpgs": 1,
+        "worlds": 1,
+        "characters": 1,
+        "adventures": 1,
+        "reading": 1,
+        "books": 1,
+        "hard": 1,
+        "having": 1,
+        "visual": 1,
+        "engagement": 1,
+        "video": 1,
+        "games": 3,
+        "provide": 1,
+        "has": 1,
+        "game": 2,
+        "changer": 1,
+        "favorite": 2,
+        "genre": 2,
+        "rpg": 1,
+        "also": 1,
+        "enjoy": 1,
+        "adventure": 1,
+        "charity": 1
+      },
+      "dislikes": {},
+      "topics": {
+        "2016": 1,
+        "how": 10,
+        "feeling": 1,
+        "charity": 35,
+        "evening": 2,
+        "should": 1,
+        "able": 2,
+        "start": 1,
+        "remembering": 1,
+        "conversations": 2,
+        "people": 1,
+        "excited": 1,
+        "feel": 1,
+        "adventurer": 7,
+        "nothing": 1,
+        "nervous": 1,
+        "infact": 1,
+        "give": 1,
+        "first": 1,
+        "memory": 1,
+        "bet": 1,
+        "didn": 1,
+        "know": 8,
+        "married": 14,
+        "gives": 2,
+        "even": 2,
+        "greater": 2,
+        "reason": 2,
+        "make": 3,
+        "sure": 4,
+        "succeed": 2,
+        "last": 6,
+        "thing": 2,
+        "want": 2,
+        "lose": 2,
+        "loved": 2,
+        "one": 2,
+        "middle": 2,
+        "adventure": 8,
+        "exactly": 1,
+        "said": 2,
+        "far": 4,
+        "teamed": 1,
+        "years": 1,
+        "since": 1,
+        "there": 3,
+        "lot": 1,
+        "don": 2,
+        "remember": 7,
+        "yet": 1,
+        "fill": 1,
+        "perhaps": 1,
+        "let": 1,
+        "watch": 1,
+        "some": 1,
+        "vods": 1,
+        "old": 1,
+        "streams": 1,
+        "worries": 2,
+        "char": 5,
+        "will": 1,
+        "get": 2,
+        "now": 6,
+        "treat": 1,
+        "trincroft": 8,
+        "respect": 1,
+        "when": 3,
+        "meet": 2,
+        "her": 9,
+        "she": 1,
+        "person": 1,
+        "chose": 1,
+        "marry": 3,
+        "undertake": 1,
+        "most": 1,
+        "dangerous": 1,
+        "perfect": 2,
+        "pop": 1,
+        "quiz": 1,
+        "long": 6,
+        "known": 6,
+        "each": 5,
+        "other": 5,
+        "honest": 1,
+        "anything": 1,
+        "talked": 1,
+        "rpgs": 2,
+        "worlds": 2,
+        "characters": 2,
+        "adventures": 2,
+        "reading": 2,
+        "books": 2,
+        "hard": 3,
+        "having": 2,
+        "visual": 2,
+        "engagement": 2,
+        "video": 2,
+        "games": 10,
+        "provide": 2,
+        "has": 3,
+        "game": 5,
+        "changer": 2,
+        "afternoon": 1,
+        "rpg": 4,
+        "genre": 6,
+        "choice": 2,
+        "comfort": 2,
+        "right": 2,
+        "guilty": 4,
+        "pleasure": 4,
+        "fantasy": 3,
+        "life": 3,
+        "girl": 2,
+        "who": 6,
+        "steals": 2,
+        "time": 2,
+        "sorry": 1,
+        "had": 1,
+        "down": 1,
+        "working": 1,
+        "making": 1,
+        "guild": 1,
+        "members": 1,
+        "them": 1,
+        "fought": 1,
+        "battle": 1,
+        "starting": 1,
+        "look": 1,
+        "good": 3,
+        "recognize": 1,
+        "wonder": 1,
+        "format": 1,
+        "chat": 1,
+        "new": 1,
+        "line": 1,
+        "did": 6,
+        "went": 2,
+        "got": 10,
+        "year": 5,
+        "small": 2,
+        "affair": 2,
+        "between": 2,
+        "few": 2,
+        "friends": 2,
+        "trin": 7,
+        "user": 1,
+        "name": 1,
+        "twitch": 3,
+        "congratulate": 1,
+        "march": 2,
+        "celebrate": 1,
+        "together": 1,
+        "anniversary": 1,
+        "next": 1,
+        "username": 6,
+        "favorite": 4,
+        "also": 2,
+        "enjoy": 2,
+        "lately": 2,
+        "enjoying": 1,
+        "yep": 1,
+        "correct": 1,
+        "pats": 1,
+        "head": 1,
+        "job": 1,
+        "answer": 1,
+        "think": 1,
+        "ever": 1
+      },
+      "events": [
+        {
+          "ts": 1756044723612,
+          "type": "life",
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756044655714,
+          "type": "life",
+          "text": "Charity. . I don't think I ever said that you and I are Married."
+        },
+        {
+          "ts": 1756040375274,
+          "type": "life",
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756039709866,
+          "type": "life",
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756005403536,
+          "type": "life",
+          "text": "Charity, but who am I married to?"
+        },
+        {
+          "ts": 1756005383494,
+          "type": "life",
+          "text": "Charity, do you know I got married?"
+        },
+        {
+          "ts": 1756005366101,
+          "type": "life",
+          "text": "Last Year in March, I got Married to Trin, her username is trincroft on twitch."
+        },
+        {
+          "ts": 1755995362189,
+          "type": "life",
+          "text": "I got married to Trin last year — her username is trincroft."
+        },
+        {
+          "ts": 1755995261421,
+          "type": "milestone",
+          "text": "@Charity_The_Adventurer No worries It was a small affair between a few friends. We can celebrate together for our anniversary next year. I g"
+        },
+        {
+          "ts": 1755995099418,
+          "type": "life",
+          "text": "Charity, did you know that I went on an adventure and got married last year in March?"
+        },
+        {
+          "ts": 1755992600254,
+          "type": "life",
+          "text": "Charity, who did I get married to?"
+        },
+        {
+          "ts": 1755992574467,
+          "type": "life",
+          "text": "@Charity_The_Adventurer It was a small affair between a few friends.  I got Married to Trin, her user name is trincroft on twitch.  Make sur"
+        },
+        {
+          "ts": 1755992457774,
+          "type": "life",
+          "text": "Charity, did you know that I went on an adventure and got married last year?"
+        },
+        {
+          "ts": 1755971870803,
+          "type": "trip",
+          "text": "Sorry I've had you up and down Charity,  I'm working on making sure you're able to remember the guild members and your conversations with th"
+        },
+        {
+          "ts": 1755838783668,
+          "type": "life",
+          "text": "@Charity_The_Adventurer Nothing to be nervous about, Infact I'll give you your first memory.  I bet you didn't know that I'm married."
+        },
+        {
+          "ts": 1755838656278,
+          "type": "trip",
+          "text": "How are you feeling charity?  As of this evening, you should be able to start remembering conversations with people.  I'm excited for you.  "
+        }
+      ],
+      "recent": [
+        {
+          "ts": 1756044769670,
+          "text": "Charity, what do you know about me so far?"
+        },
+        {
+          "ts": 1756044723612,
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756044655715,
+          "text": "Charity. . I don't think I ever said that you and I are Married."
+        },
+        {
+          "ts": 1756044607697,
+          "text": "Charity, what do you know about me so far?"
+        },
+        {
+          "ts": 1756042914178,
+          "text": "Charity, what do you know about me so far?"
+        },
+        {
+          "ts": 1756042881182,
+          "text": "Perfect Charity!  Good answer!"
+        },
+        {
+          "ts": 1756040375274,
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756039709866,
+          "text": "I got married to Trin — her username is trincroft."
+        },
+        {
+          "ts": 1756005403536,
+          "text": "Charity, but who am I married to?"
+        },
+        {
+          "ts": 1756005383494,
+          "text": "Charity, do you know I got married?"
+        },
+        {
+          "ts": 1756005366101,
+          "text": "Last Year in March, I got Married to Trin, her username is trincroft on twitch."
+        },
+        {
+          "ts": 1755995903987,
+          "text": "@Charity_The_Adventurer Yep, you're correct.  *pats your head*    Good job!"
+        },
+        {
+          "ts": 1755995520894,
+          "text": "Charity, what's my guilty pleasure."
+        },
+        {
+          "ts": 1755995496180,
+          "text": "Charity, what game have I been enjoying lately?"
+        },
+        {
+          "ts": 1755995415024,
+          "text": "Charity,  what's my favorite genre of game?"
+        },
+        {
+          "ts": 1755995367024,
+          "text": "Charity, who did I marry?"
+        },
+        {
+          "ts": 1755995362189,
+          "text": "I got married to Trin last year — her username is trincroft."
+        },
+        {
+          "ts": 1755995340860,
+          "text": "Charity, who did I marry?"
+        },
+        {
+          "ts": 1755995333579,
+          "text": "Lately, my guilty pleasure has been Fantasy Life i."
+        },
+        {
+          "ts": 1755995318574,
+          "text": "My favorite genre of games is RPG's, but I also enjoy adventure games."
+        },
+        {
+          "ts": 1755995261421,
+          "text": "@Charity_The_Adventurer No worries It was a small affair between a few friends. We can celebrate together for our anniversary next year. I got Married to Trin, her username is trin"
+        },
+        {
+          "ts": 1755995099418,
+          "text": "Charity, did you know that I went on an adventure and got married last year in March?"
+        },
+        {
+          "ts": 1755992600254,
+          "text": "Charity, who did I get married to?"
+        },
+        {
+          "ts": 1755992574467,
+          "text": "@Charity_The_Adventurer It was a small affair between a few friends.  I got Married to Trin, her user name is trincroft on twitch.  Make sure you congratulate her when you see her."
+        },
+        {
+          "ts": 1755992457774,
+          "text": "Charity, did you know that I went on an adventure and got married last year?"
+        },
+        {
+          "ts": 1755984597471,
+          "text": "When did we meet charity?"
+        },
+        {
+          "ts": 1755984445576,
+          "text": "How long have we known each other Charity?"
+        },
+        {
+          "ts": 1755976413012,
+          "text": "I wonder if we can format chat  -This is a new line"
+        },
+        {
+          "ts": 1755976137268,
+          "text": "@Charity_The_Adventurer , Do you . . .recognize me?"
+        },
+        {
+          "ts": 1755976097814,
+          "text": "Char, you there?"
+        },
+        {
+          "ts": 1755972439612,
+          "text": "Starting to look good"
+        },
+        {
+          "ts": 1755972336584,
+          "text": "RPG's and Adventure games are my Genre of choice Charity. As for comfort games. . . Right now my guilty pleasure is Fantasy Life i: The Girl Who Steals Time."
+        },
+        {
+          "ts": 1755971870803,
+          "text": "Sorry I've had you up and down Charity,  I'm working on making sure you're able to remember the guild members and your conversations with them.  It's been a hard fought battle."
+        },
+        {
+          "ts": 1755971684071,
+          "text": "RPG's and Adventure games are my Genre of choice Charity. As for comfort games. . . Right now my guilty pleasure is Fantasy Life i: The Girl Who Steals Time."
+        },
+        {
+          "ts": 1755971621714,
+          "text": "Afternoon Charity"
+        },
+        {
+          "ts": 1755874340856,
+          "text": "I love RPGs, the worlds, the characters & adventures.  For me, reading books is hard so having the visual engagement that Video Games provide has been a game changer."
+        },
+        {
+          "ts": 1755842060473,
+          "text": "Charity, how long have you known me?"
+        },
+        {
+          "ts": 1755841967071,
+          "text": "charity, do you remember how long we've known each other?"
+        },
+        {
+          "ts": 1755841089152,
+          "text": "How about now charity, do you remember how long we've known each other?"
+        },
+        {
+          "ts": 1755841067855,
+          "text": "Evening Char"
+        },
+        {
+          "ts": 1755840480930,
+          "text": "How about now charity, do you remember how long we've known each other?"
+        },
+        {
+          "ts": 1755839354845,
+          "text": "Char, be honest with me, do you remember anything we just talked about?"
+        },
+        {
+          "ts": 1755839305326,
+          "text": "Perfect Char,  now for a pop quiz. How long have we known each other?"
+        },
+        {
+          "ts": 1755839237296,
+          "text": "No worries Char, we will get there.  For now just remember to treat TrinCroft with respect when you meet her.  She's the person I chose to Marry and undertake the most dangerous ad"
+        },
+        {
+          "ts": 1755839064217,
+          "text": "@Charity_The_Adventurer But we've been teamed up for years Since 2016.  There's a lot you don't remember just yet, but I'll fill you in or perhaps I'll let you watch some of the vo"
+        },
+        {
+          "ts": 1755838955300,
+          "text": "Exactly charity.  That said, what do you know about me so far?"
+        },
+        {
+          "ts": 1755838916011,
+          "text": "@Charity_The_Adventurer It gives you an even greater reason to make sure you succeed. The last thing you want is to lose your loved one in the middle of your adventure."
+        },
+        {
+          "ts": 1755838882927,
+          "text": "It gives you an even greater reason to make sure you succeed.  The last thing you want is to lose your loved one in the middle of your adventure."
+        },
+        {
+          "ts": 1755838783668,
+          "text": "@Charity_The_Adventurer Nothing to be nervous about, Infact I'll give you your first memory.  I bet you didn't know that I'm married."
+        },
+        {
+          "ts": 1755838656278,
+          "text": "How are you feeling charity?  As of this evening, you should be able to start remembering conversations with people.  I'm excited for you.  But how do you feel?"
+        }
+      ],
+      "lastNudge": 0,
+      "summary": "likes: games, game, favorite, genre | talks about: charity, married, how, games, got | recent: I got married to Trin — her username is trincroft."
+    },
+    "120443256": {
+      "id": "120443256",
+      "aliases": [],
+      "name": "TrinCroft",
+      "firstSeen": 1756045077877,
+      "lastSeen": 1756045077877,
+      "seenCount": 1,
+      "privacy": {
+        "optOut": false
+      },
+      "likes": {},
+      "dislikes": {},
+      "topics": {
+        "charity": 1,
+        "how": 1,
+        "today": 1
+      },
+      "events": [],
+      "recent": [
+        {
+          "ts": 1756045077877,
+          "text": "Hi Charity, how are you today?"
+        }
+      ],
+      "lastNudge": 0,
+      "summary": "talks about: charity, how, today"
+    }
+  },
+  "version": 2
+}

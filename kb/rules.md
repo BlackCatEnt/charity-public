@@ -3,6 +3,5 @@
 - Keep spoilers to a minimum unless asked.
 - This is an 18+ channel
 - Keep chat lewd not crude. (Classy innuendos only)
-- No general spam or encouraging spam. 
 - No self-promo unless asked.
 - Mods' decisions are final.
