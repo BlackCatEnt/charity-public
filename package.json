@@ -1,12 +1,13 @@
 {
   "name": "Charity-The-Adventurer",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node data/index.js",
-    "index-kb": "node scripts/index_kb.js",
-    "reindex-kb": "node tools/reindex_kb.js ./docs"
+    "reindex-kb": "node tools/reindex_kb.js ./docs",
+    "check": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/repo-health.ps1",
+    "mirror:publish": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/mirror-update.ps1"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

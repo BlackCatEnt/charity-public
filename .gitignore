@@ -18,3 +18,27 @@ build/
 # Ignore OS / editor junk
 .DS_Store
 Thumbs.db
+
+# secrets
+.env
+config/charity-config.json
+data/
+logs/
+*.log
+*.sqlite
+*.db
+token*.json
+
+# node
+node_modules/
+
+# models / artifacts
+models/
+*.onnx
+*.pt
+*.bin
+*.gguf
+
+# OS
+Thumbs.db
+.DS_Store
