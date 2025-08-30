@@ -1,0 +1,17 @@
+{
+"twitch": {
+"client_id": "<YOUR_TWITCH_CLIENT_ID>",
+"client_secret": "<REDACTED>",
+"bot_username": "charity_the_adventurer",
+"channel": "bagotrix"
+},
+"memory": {
+"embed_provider": "bge-m3",
+"bge_m3": {
+"onnx_path": "C:/models/bge-m3.onnx",
+"tokenizer_json_path": "C:/models/bge-m3-tokenizer.json",
+"ep": "cpu",
+"max_length": 512
+}
+}
+}
