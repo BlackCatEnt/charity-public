@@ -1,4 +1,24 @@
 # Charity Twitch Bot – Development Roadmap (Aug 21 Addendum)
+✅ Completed
+
+Tier 0 — Baseline Stability
+
+Charity can join Twitch chat, respond to !ask, and stay online without crashing.
+
+GPU acceleration stable on RTX 4080 (CUDA 12.9).
+
+Logging and preflight checks in place.
+
+Phase 2 – Strategic Builders
+
+✅ Town Crier (Ad Timer) v0.1 — shipped (warns/snoozes/manual-run, throttled chatter).
+
+In Progress: Guild Guard Filters v0.1
+
+Scope: banned-terms, caps/emote spam, link policy, lore warnings, per-user cooldown, optional timeout, mod commands, runtime persistence.
+
+Next: v0.2 — auto-permit via !permit <user> (temporary link allow), OBS log overlay, per-rule analytics.
+
 ...1: Core Features (Expanded)
 
 ### 🎮 Observer Mode
@@ -20,6 +40,14 @@
 - Keep tone consistent (curious, kind, a little sassy) while staying helpful.
 - Maintain the “Guild” worldbuilding tone.
 
+🎯 Current Focus: Tier 1–2 Features
+Tier 1 — Conversational Reliability
+Tier 2 — Knowledgeable Assistant
+
+📌 Next Candidate (after Tier 1–2)
+
+Phase 2 community immersion (Guild Guard Filters + Town Crier).
+
 ---
 
 ## 2: User Experience Improvements
@@ -32,6 +60,7 @@
 ### 🔔 Notifications & Events
 - Add lightweight announcement system for important events (starting soon, ASMR day, giveaways, raids).
 - Integrate with OBS/Twitch events for timed notifications.
+- Ad break notifications with guild related CTA for subscribing.
 
 ### 🧭 Commands UX
 - Consolidate commands (`!ask`, `!help`, `!rules`) and improve discoverability.
@@ -54,6 +83,9 @@
 - Investigate Whisper-based ASR for stream audio.
 - Explore per‑speaker diarization (identify Guild Master vs. guests).
 - Add voice command hooks (like “Charity, note this”).
+
+### IGDB
+- Integration with https://www.igdb.com/ to be able to eventually post bagotrix's opinions of games he plays.
 
 ---
 
@@ -156,3 +188,33 @@
 - Add path checker and example config for mirror publishing.
 - Begin drafting ASR+diarization plan for Phase 2.
 
+## Technical Foundations
+
+ ### LLM Strategy
+- **Daily Driver (Local 13B):**  
+   Charity should default to a strong 13B instruct model running locally. This improves function calling and tone consistency compared to 7B while staying compatible with existing hardware (RTX 4080).
+
+- **Router + Guardrails:**  
+   All moderation and tool routing should flow through deterministic filters, classifiers, and rules. The LLM provides flavor and narrative, but moderation reliability comes from the guardrail stack, not just scaling the model.
+
+- **Big Model Fallback (Cloud):**  
+   For complex planning, special events, or unusually hard cases, Charity may “phone a friend” 🌿 and escalate to a large hosted model. This should be rare (≤10% of requests) to keep latency low and operations predictable.
+
+- **Hybrid Design Goal:**  
+   Keep 90% of Charity’s runtime local and fast, with burst capability into cloud scale only when strategically necessary.
+
+- **Recommended Today:**  
+   RTX 4080 + 13B local model as the daily driver, with cloud fallback for complex cases.
+
+## Future Phases
+- **Exploration of Larger Local Models:**  
+   Depending on Charity’s success and community growth, future phases may consider local deployment of 30B+ class models. This would require upgraded hardware (e.g., 24GB+ VRAM GPUs or multi-GPU setups).  
+   This is strictly a long-term, aspirational plan, not part of the immediate roadmap. Current focus remains on maximizing efficiency and reliability with 13B local + cloud fallback.
+
+   **Hardware Quick Reference:**  
+   • 7B–8B → ~6–12 GB VRAM (fits comfortably on RTX 4080).  
+   • 13B–14B → ~10–18 GB VRAM (ideal on RTX 4080 16GB).  
+   • 30B+ → ~24–40 GB VRAM (24GB+ cards or dual GPUs).  
+   • 70B → 48GB+ VRAM per GPU, or multi-GPU server-grade hardware.  
+   • System RAM: 32GB recommended for RAG + tools.  
+   • Storage: NVMe, budget ~100GB+ for models + indexes.

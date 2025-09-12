@@ -1,26 +1,25 @@
 @echo off
 setlocal
-REM ----- Run from the folder where this .bat lives -----
-cd /d "%~dp0"
+cd /d "A:\Charity"
+where pwsh >nul 2>&1 && (set "PS=pwsh") || (set "PS=powershell")
 
-REM ----- Prefer PowerShell 7 (pwsh), fall back to Windows PowerShell -----
-where pwsh >nul 2>&1
-if %errorlevel%==0 (
-  set "PS=pwsh"
-) else (
-  set "PS=powershell"
+echo [health] Running repo checks...
+"%PS%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\repo-health.ps1" || (
+  echo [health] ❌ Issues found. Not publishing.
+  echo.
+  pause
+  exit /b 1
 )
 
-echo [mirror] Starting public mirror update via tools\mirror-update.ps1...
-"%PS%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\mirror-update.ps1"
-set "ERR=%ERRORLEVEL%"
+echo [mirror] Publishing to public repo (non-strict scan)...
+"%PS%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\publish.ps1" ^
+  -Source "A:\Charity" ^
+  -Dest   "A:\repos\charity-public" ^
+  -RepoUrl "https://github.com/BlackCatEnt/charity-public.git" ^
+  -Branch "main"
 
-if "%ERR%"=="0" (
-  echo [mirror] ✅ Completed successfully.
-) else (
-  echo [mirror] ❌ Exited with code %ERR%.
-)
-
+set ERR=%ERRORLEVEL%
+if "%ERR%"=="0" (echo [mirror] ✅ Published) else (echo [mirror] ❌ Publish failed (%ERR%))
 echo.
 pause
 endlocal
