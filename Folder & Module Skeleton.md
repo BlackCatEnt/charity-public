@@ -2,12 +2,17 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
-    orchestrator.mjs
+    llm\ollama.mjs		        
+	orchestrator.mjs
     bus.mjs
     router.mjs                  # unified message pipeline
     safety.mjs
     delays.mjs                  # human-like timing
     telemetry.mjs
+    guards.mjs
+    feedback.mjs
+	rag.keyword.mjs
+	rag.store.mjs
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md
@@ -15,12 +20,14 @@ A:\Charity\
   soul\                         # (Data)
     kb\                         # knowledge base, chunks, provenance
 	kb\index\               	# vector stores (gitignored)
-    memory\episodes\            # episodic logs
+    kb\charity-northstar.jsonl  
+	memory\episodes\            # episodic logs
     cache\
 	cache\onnxrt\           	# onnx/tensorrt runtime caches (gitignored)	
   rituals\                      # (Training & curation)
     feedback\2025-09\           # realtime thumbs/tags as JSONL
-    snapshots\weekly\
+    feedback\writer.mjs			# 
+	snapshots\weekly\
     cli\charity-cli.mjs         # dataset:snapshot|load|rollback|health
   halls\                        # (Platform adapters)
     twitch\adapter.mjs
@@ -33,8 +40,17 @@ A:\Charity\
   relics\                       # (Tools & scripts)
     path-checker.mjs        	# verifies manifest + filesystem
     publish.mjs
+	tokens.mjs
+	helix.mjs					# twitch helix client
+	helix-smoke.mjs				# helix Smoke Test	
+	twitch-validate.mjs			# tiny validator (tells you whose token it is + scopes)
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
   trials\                       # (Tests)
     e2e\
     unit\
+  adapters\
+	twitch.mjs					#twitch adapter shim
+	discord.mjs					#discord adapter shim
+  core\
+	router.mjs					#mind router shim
