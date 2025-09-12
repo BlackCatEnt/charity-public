@@ -1,29 +1,64 @@
 {
   "name": "Charity-The-Adventurer",
-  "version": "0.3.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node data/index.js",
     "reindex-kb": "node tools/reindex_kb.js ./docs",
-    "check": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/repo-health.ps1",
-    "mirror:publish": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/mirror-update.ps1"
+    "check": "node relics/path-checker.mjs",
+    "smoke": "node tools/smoke.js",
+    "mirror:publish": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/mirror-update.ps1",
+    "tokens:fix": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/fix-env.ps1",
+    "tokens:fix:bot": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/fix-env.ps1 -Bot -Broadcaster:$false",
+    "tokens:fix:broad": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File tools/fix-env.ps1 -Bot:$false -Broadcaster",
+    "tokens:status": "node tools/token-status.mjs",
+    "tokens:clear": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item -EA Ignore data/token_state.json\"",
+    "embeddings:test": "node tools/embeddings-test.mjs",
+    "es:status": "node tools/eventsub-status.mjs",
+    "tokens:refresh": "node tools/token-refresh.mjs",
+    "tokens:refresh:bot": "node tools/token-refresh.mjs bot",
+    "tokens:refresh:broad": "node tools/token-refresh.mjs broadcaster",
+    "simulate": "node tools/simulatechat.mjs",
+    "llm:test": "node tools/llm-smoke.mjs",
+    "intent:test": "node tools/intent-smoke.mjs",
+    "helix:whoami": "node tools/helix-whoami.mjs",
+	"discord:dm": "node tools/discord-dm.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
     "chokidar": "^3.6.0",
+    "discord.js": "^14.22.1",
     "dotenv": "^16.4.5",
+    "lru-cache": "^11.1.0",
     "onnxruntime-node": "^1.22.0-rev",
     "openai": "^5.15.0",
     "tmi.js": "^1.8.5",
     "tokenizers": "^0.13.3",
     "tokenizers-win32-x64-msvc": "^0.13.4-rc1",
-    "winston": "^3.13.0"
+    "winston": "^3.13.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "axios": "^1.11.0"
   },
   "imports": {
     "#embeddings": "./modular_phase2/modules/embeddings.js"
+  },
+  {
+  "type": "module",
+  "imports": {
+    "#mind/*": "./mind/*",
+    "#heart/*": "./heart/*",
+    "#soul/*": "./soul/*",
+    "#halls/*": "./halls/*",
+    "#rituals/*": "./rituals/*",
+    "#codex/*": "./codex/*",
+    "#relics/*": "./relics/*",
+    "#sentry/*": "./sentry/*",
+    "#core/*": "./mind/*",
+    "#adapters/*": "./halls/*"
   }
+}
+
 }

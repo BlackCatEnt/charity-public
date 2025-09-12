@@ -28,58 +28,45 @@ export function createAutoMemoryCommands({
     return recency * conf + lockBoost;
   }
 
-  async function handleMe(channel, tags) {
-    if (episodic?.isOptedOut?.(tags)) {
-      return sayWithConsent(channel, tags,
-        `${formatAddress(tags)} You’re opted out of personalization — use !optin anytime.`);
-    }
-
-    // pull candidate episodes & facts
-    const { hits: eps = [] } = await episodic.searchUserEpisodes({
-      tags, embedder, query: 'what they care about recently', topK: 4
-    });
-    const facts =
-      episodic.getProfileFactsCombined?.(tags, 8) ||
-      episodic.getFactsByTags?.(tags, 8) ||
-      [];
-
-    // pick best path (fact vs recent episode)
-    const choice = speaker.chooseReplyPath({ facts, episodes: eps, minConf: 0.6 });
-
-    const name = tags['display-name'] || tags.username || 'friend';
-    let line;
-
-    if (choice.kind === 'recall') {
-      const v = String(choice.fact.v ?? '').trim() || 'that topic';
-      const when = daysAgo(choice.fact.last_seen || choice.fact.first_seen);
-      const opts = [
-        `I remember you’re into ${v} — ${when}.`,
-        `Last we talked you mentioned ${v}.`,
-        `Noted: you like ${v} (${when}).`,
-        `I kept a note you enjoy ${v}.`
-      ];
-      line = pickPhrase(tags['user-id'] || 0, opts);
-
-    } else if (choice.kind === 'episode') {
-      const line1 = speaker.lineFor({
-        display: tags['display-name'] || tags.username,
-        episode: choice.ep,
-        confidence: choice.ep.score || 0,
-        minConfidence: 0.6,
-        repeatSupport: 1,
-        includeName: false
-      });
-      line = line1 || `I noted a recent topic you brought up—care to dig in?`;
-
-    } else {
-      line = `I don’t know your tastes yet — tell me one thing you’re into!`;
-    }
-
-    console?.info?.(
-      `[trace] !me path=${choice.kind} fact=${choice?.fact?.k || ''} epScore=${choice?.ep?.score || ''}`
-    );
-    return sayWithConsent(channel, tags, `${formatAddress(tags)} ${line}`);
+async function handleMe(channel, tags) {
+  if (episodic?.isOptedOut?.(tags)) {
+    return sayWithConsent(channel, tags,
+      `${formatAddress(tags)} You’re opted out of personalization — use !optin anytime.`);
   }
+
+  // Pull a broader set, then score/sort newest-first
+  const facts =
+    episodic.getProfileFactsCombined?.(tags, 16) ||
+    episodic.getFactsByTags?.(tags, 16) || [];
+
+  if (!facts.length) {
+    return sayWithConsent(channel, tags,
+      `${formatAddress(tags)} I don’t have much yet—tell me one thing you’re into!`);
+  }
+
+  const scored = facts.map(f => ({
+    ...f,
+    _s: scoreFact(f),                       // recency + confidence
+    _t: f.last_seen || f.first_seen || 0,   // timestamp for tie-break
+  }))
+  .sort((a, b) => (b._s - a._s) || (b._t - a._t));
+
+  // Skip boilerplate keys like when_we_met
+  const top = scored.filter(f => f.k !== 'when_we_met').slice(0, 3);
+
+  const bits = top.map(f => {
+    const key = f.k.replace(/_/g, ' ');
+    const val = String(f.v ?? '').trim();
+    return `${key} — ${val}`;
+  });
+
+  const line = bits.length
+    ? `Here’s what’s top of mind: ${bits.join(' • ')}.`
+    : `I don’t know your tastes yet — tell me one thing you’re into!`;
+
+  return sayWithConsent(channel, tags, `${formatAddress(tags)} ${line}`);
+}
+
 
   async function handleOptOut(channel, tags) {
     episodic.setOptOutByTags(tags, true);
@@ -99,9 +86,15 @@ export function createAutoMemoryCommands({
       `${formatAddress(tags)} Wiped your profile & episodes for this channel.`);
   }
 
-  async function handlePrivacy(channel, tags) {
-    return sayWithConsent(channel, tags, `${formatAddress(tags)} I keep lightweight notes to personalize chat. Commands: !me | !optout | !optin | !forgetme | !profile`);
-  }
+// replace the whole handlePrivacy() with this
+async function handlePrivacy(channel, tags) {
+  const on = !episodic?.isOptedOut?.(tags);
+  return sayWithConsent(
+    channel,
+    tags,
+    `${formatAddress(tags)} Memory: ${on ? 'on' : 'off'}. cmds: !me !profile !optout !optin !forgetme`
+  );
+}
 
   // natural-language “remember key: value”
   async function handleRemember(channel, tags, text) {
@@ -132,21 +125,30 @@ export function createAutoMemoryCommands({
       `${formatAddress(tags)} ${ok ? `Forgot ${key.replace(/_/g,' ')}` : `I didn’t have ${key.replace(/_/g,' ')}`}.`);
   }
 
-  async function handleProfile(channel, tags) {
-    const facts = episodic.getProfileFactsCombined?.(tags, 8) || [];
-    if (!facts.length) {
-      return sayWithConsent(channel, tags,
-        `${formatAddress(tags)} I don’t have your long-term profile yet—teach me with !remember key: value`);
-    }
-    const byKey = Object.fromEntries(facts.map(f => [f.k, f]));
-    let opener = '';
-    if (byKey.when_we_met?.v) opener = `since ${byKey.when_we_met.v}`;
-    const nice = facts.find(f => f.k !== 'when_we_met');
-    return sayWithConsent(
-      channel, tags,
-      `${formatAddress(tags)} ${opener ? `We’ve quested together ${opener}. ` : ''}${nice ? `You’re into ${nice.k.replace(/_/g,' ')} — ${nice.v}.` : ''}`
-    );
+
+async function handleProfile(channel, tags) {
+  const facts = episodic.getProfileFactsCombined?.(tags, 24) || [];
+  if (!facts.length) {
+    return sayWithConsent(channel, tags,
+      `${formatAddress(tags)} I don’t have your long-term profile yet—teach me with !remember key: value`);
   }
+
+  const byKey = Object.fromEntries(facts.map(f => [f.k, f]));
+  const opener = byKey.when_we_met?.v ? `We’ve quested together since ${byKey.when_we_met.v}. ` : '';
+
+  const sorted = facts
+    .filter(f => f.k !== 'when_we_met')
+    .map(f => ({ ...f, _s: scoreFact(f), _t: f.last_seen || f.first_seen || 0 }))
+    .sort((a, b) => (b._s - a._s) || (b._t - a._t));
+
+  const nice = sorted[0];
+  const line = nice
+    ? `${opener}You’re into ${nice.k.replace(/_/g, ' ')} — ${String(nice.v).trim()}.`
+    : `I’m still learning your long-term preferences.`;
+
+  return sayWithConsent(channel, tags, `${formatAddress(tags)} ${line}`);
+}
+
 
   return {
     handleMe,
