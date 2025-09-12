@@ -20,7 +20,6 @@ build/
 Thumbs.db
 
 # secrets
-.env
 config/charity-config.json
 data/
 logs/
@@ -67,3 +66,24 @@ soul/cache/**
 *.gguf
 /release/
 /archive/
+
+# env & secrets
+.env
+.env.*
+
+# caches & tokens
+soul/cache/**
+soul/memory/episodes/**
+soul/kb/index/**
+
+# models/binaries (kept outside repo)
+*.onnx
+*.gguf
+*.plan
+*.bin
+
+# local release folder
+/release/
+
+# node
+node_modules/

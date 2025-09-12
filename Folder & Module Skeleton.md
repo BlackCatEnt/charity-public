@@ -29,6 +29,7 @@ A:\Charity\
     feedback\writer.mjs			# 
 	snapshots\weekly\
     cli\charity-cli.mjs         # dataset:snapshot|load|rollback|health
+    cli/feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
   halls\                        # (Platform adapters)
     twitch\adapter.mjs
     discord\adapter.mjs
@@ -43,6 +44,7 @@ A:\Charity\
 	tokens.mjs
 	helix.mjs					# twitch helix client
 	helix-smoke.mjs				# helix Smoke Test	
+	publish.ps1					# Simple PowerShell publisher (Windows-friendly)
 	twitch-validate.mjs			# tiny validator (tells you whose token it is + scopes)
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
