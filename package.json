@@ -19,9 +19,11 @@
     "start": "node boot/index.mjs",
     "check": "node relics/path-checker.mjs",
     "fb:snapshot": "node rituals/cli/feedback-snapshot.mjs --window=7d",
-	"preflight": "npm run check && node relics/helix-smoke.mjs"
+    "preflight": "npm run check && node relics/helix-smoke.mjs",
+	"mem:backfill": "node rituals/cli/memory-backfill.mjs --days=30"
   },
   "dependencies": {
+    "better-sqlite3": "^12.2.0",
     "discord.js": "^14.22.1",
     "dotenv": "^17.2.2",
     "tmi.js": "^1.8.5"

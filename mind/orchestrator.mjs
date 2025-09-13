@@ -6,6 +6,7 @@ import { makeKeywordRag } from '#mind/rag.keyword.mjs';
 import { setRag } from '#mind/rag.store.mjs';
 import { makeSafety } from '#mind/safety.mjs';
 import { makeMemory } from '#mind/memory.mjs';
+import { makeVectorMemory } from '#mind/memory.vector.mjs';
 
 
 export async function makeOrchestrator({ cfg }) {
@@ -18,6 +19,7 @@ export async function makeOrchestrator({ cfg }) {
   const rag = await makeKeywordRag({});
   setRag(rag);
   const memory = makeMemory();
+  const vmem   = await makeVectorMemory({});
   
   const router = createRouter({
     cfg,
@@ -25,7 +27,8 @@ export async function makeOrchestrator({ cfg }) {
     safety: makeSafety(),
     rag,
     llm,
-    memory
+    memory,
+	vmem
   });
 
   const io = {
