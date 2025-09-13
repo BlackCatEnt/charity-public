@@ -3,7 +3,7 @@ import { guards } from '#mind/guards.mjs';
 import { tryRecordFeedback } from '#mind/feedback.mjs';
 import { getRag, setRag } from '#mind/rag.store.mjs';
 import { makeKeywordRag } from '#mind/rag.keyword.mjs';
-
+import { nowInfo } from '#mind/time.mjs';
 
 // Safe defaults until real services are passed in from the orchestrator.
 function defaultSafety() { return { pass: () => true }; }
@@ -77,11 +77,23 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
         return;
       }
 	  if (/^!whoami\b/i.test(text)) {
-		const bio = persona?.bios?.short_bio || 'I am Charity, the guild’s companion and guide.';
-		await io.send(evt.roomId, bio, { hall: evt.hall });
+		const promptEvt = { ...evt, text:
+		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
+		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
+      };
+		const reply = await _llm.compose({ evt: promptEvt, ctx: [], persona, cfg });
+		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
+		await delayFor(out);
+		await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
+		if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
 		return;
       }
 
+	  if (/^!time\b/i.test(text)) {
+		const { pretty, tz } = nowInfo();
+		await io.send(evt.roomId, `It’s ${pretty} (${tz}). ✧`, { hall: evt.hall });
+		return;
+      }
       // If observer is ON, ignore unless directly addressed or command
       const isAddressed = /^!ask\b/i.test(text) || /(^|[\s@])charity\b/i.test(text);
       if (guards.observer && !isAddressed) return;
