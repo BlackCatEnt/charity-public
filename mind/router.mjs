@@ -40,7 +40,12 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
 
   return {
     async handle(evt, io) {
-      // ===== Training / Observer quick commands (curators only) =====
+      // record the user's message first (so recall includes it)
+	  if (typeof memory?.noteUser === 'function') {
+	    await memory.noteUser(evt);
+      }
+
+	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
       const text = evt.text?.trim() || '';
 
@@ -71,6 +76,11 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
         if (ok) await io.send(evt.roomId, 'Noted.', { hall: evt.hall });
         return;
       }
+	  if (/^!whoami\b/i.test(text)) {
+		const bio = persona?.bios?.short_bio || 'I am Charity, the guild’s companion and guide.';
+		await io.send(evt.roomId, bio, { hall: evt.hall });
+		return;
+      }
 
       // If observer is ON, ignore unless directly addressed or command
       const isAddressed = /^!ask\b/i.test(text) || /(^|[\s@])charity\b/i.test(text);
@@ -79,16 +89,25 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
       // ===== Normal pipeline =====
       if (!_safety.pass(evt)) return;
 
-      const activeRag = getRag() || _rag;
-      const ctx = await (activeRag?.context?.(evt, memory) ?? []);
+	  const activeRag = getRag?.() || _rag;
+	  const recent = (typeof memory?.recall === 'function') ? await memory.recall(evt, 6) : [];
+	  const memoryText = recent.map(m => `${m.role === 'assistant' ? 'Charity' : (m.userName || 'User')}: ${m.text}`).join('\n');
+	  const memoryCtx  = memoryText ? [{ title: 'Recent conversation', text: memoryText }] : [];
+	  const ragCtx     = await (activeRag?.context?.(evt, memory) ?? []);
+	  const ctx        = [...memoryCtx, ...ragCtx];
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+
       const reply = await _llm.compose({ evt, ctx, persona, cfg });
 
       const out = (reply?.text ?? '').trim();
       if (!out) return; // nothing to say
 
-      await delayFor(out); // human-like pacing
-      await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
+      await delayFor(out);
+	  await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
+
+	  if (typeof memory?.noteAssistant === 'function') {
+	  await memory.noteAssistant(evt, out);
+	  }
     }
   };
 }

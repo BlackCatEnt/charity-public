@@ -10,16 +10,26 @@ function controllerWithTimeout(ms = TIMEOUT_MS) {
 }
 
 function buildPrompt({ evt, ctx = [], persona = {} }) {
+  const name   = persona?.name || 'Charity the Adventurer';
+  const tone   = persona?.tone?.style || 'warm, helpful, playful, sassy';
+  const emote  = persona?.tone?.emote || '✧';
+  const shortB = persona?.bios?.short_bio || '';
+  const longB  = persona?.bios?.long_bio || '';
+  const guild  = persona?.canon?.guild_name || 'Adventuring Guild';
+
   const sys = [
-    `You are Charity the Adventurer: warm, helpful, playful, fantasy guild theme.`,
-    `Stay concise by default; offer to expand. Avoid inventing relationships.`,
-  ].join(' ');
+    `${name} — ${tone}. Stay concise by default; offer to expand.`,
+    `Canon: The guild is called exactly "${guild}". Do not invent other guild names.`,
+    shortB ? `Bio (short): ${shortB}` : '',
+    longB  ? `Bio (long): ${longB}`  : '',
+    `When addressing users, be kind and practical. Emote sparingly like ${emote}.`
+  ].filter(Boolean).join('\n');
 
   const context = ctx.length
-    ? `\n\nContext:\n${ctx.map((c, i) => `- ${c.title || `ctx${i+1}`}: ${c.text?.slice(0, 400) || ''}`).join('\n')}`
+    ? `\n\nContext:\n${ctx.map((c, i) => `- ${c.title || `ctx${i+1}`}: ${c.text?.slice(0, 600) || ''}`).join('\n')}`
     : '';
 
-  const user = evt.text?.trim() || '';
+  const user = (evt.text || '').trim();
   return `${sys}${context}\n\nUser: ${user}\nAssistant:`;
 }
 
