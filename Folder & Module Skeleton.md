@@ -14,6 +14,7 @@ A:\Charity\
 	rag.keyword.mjs
 	rag.store.mjs
 	time.mjs					# Time awareness
+	memory.vector.mjs			# Vector memory module
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md
@@ -30,7 +31,8 @@ A:\Charity\
     feedback\writer.mjs			# 
 	snapshots\weekly\
     cli\charity-cli.mjs         # dataset:snapshot|load|rollback|health
-    cli/feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
+    cli\feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
+	cli\memory-backfill.mjs		# Backfill CLI (index past episodic logs)
   halls\                        # (Platform adapters)
     twitch\adapter.mjs
     discord\adapter.mjs
@@ -47,6 +49,8 @@ A:\Charity\
 	helix-smoke.mjs				# helix Smoke Test	
 	publish.ps1					# Simple PowerShell publisher (Windows-friendly)
 	twitch-validate.mjs			# tiny validator (tells you whose token it is + scopes)
+	embeddings.mjs				# Embedding client (BGE-M3 service)
+	sqlite.mjs					# SQLite helper (auto-creates schema)
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
   trials\                       # (Tests)

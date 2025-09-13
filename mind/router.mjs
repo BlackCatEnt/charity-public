@@ -33,7 +33,7 @@ function defaultLLM()     {
   };
 }
 
-export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
+export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = {}) {
   const _safety = safety ?? defaultSafety();
   const _rag    = rag    ?? defaultRag();
   const _llm    = llm    ?? defaultLLM();
@@ -44,6 +44,10 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
 	  if (typeof memory?.noteUser === 'function') {
 	    await memory.noteUser(evt);
       }
+	  // record user message (existing)
+	  if (typeof memory?.noteUser === 'function') await memory.noteUser(evt);
+	  // index user message into vector memory (best effort)
+	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'user', text: evt.text }).catch(()=>{}); }
 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
@@ -95,11 +99,18 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
 	  const memoryText = recent.map(m => `${m.role === 'assistant' ? 'Charity' : (m.userName || 'User')}: ${m.text}`).join('\n');
 	  const memoryCtx  = memoryText ? [{ title: 'Recent conversation', text: memoryText }] : [];
 	  const ragCtx     = await (activeRag?.context?.(evt, memory) ?? []);
-	  const roleHints = guards.isGuildMaster(evt)
-		? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (BagOTrix). Address respectfully as “Guild Master” when appropriate.' }]
-		: [];
 
-	  const ctx = [...roleHints, ...memoryCtx, ...ragCtx];
+	  // NEW: vector recall (semantic memory)
+	  const qText = text.startsWith('!ask') ? text.replace(/^!ask\s*/i, '').trim() : text;
+	  const vCtx  = vmem?.recallSimilar ? await vmem.recallSimilar({ evt, queryText: qText, k: 3, days: Number(process.env.MEMORY_VECTOR_DAYS || 30) }) : [];
+
+	  const roleHints = guards.isGuildMaster(evt)
+	  ? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (BagOTrix). Address respectfully as “Guild Master” when appropriate.' }]
+	  : [];
+
+	  const ctx = [...roleHints, ...memoryCtx, ...vCtx, ...ragCtx];
+	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+
 
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 	  if (/^!whoami\b/i.test(text)) {
@@ -118,6 +129,9 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
 
       const out = (reply?.text ?? '').trim();
       if (!out) return; // nothing to say
+	  if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
+	  // index assistant message too (best effort)
+	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{}); }
 
       await delayFor(out);
 	  await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
