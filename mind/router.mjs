@@ -76,18 +76,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
         if (ok) await io.send(evt.roomId, 'Noted.', { hall: evt.hall });
         return;
       }
-	  if (/^!whoami\b/i.test(text)) {
-		const promptEvt = { ...evt, text:
-		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
-		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
-      };
-		const reply = await _llm.compose({ evt: promptEvt, ctx: [], persona, cfg });
-		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
-		await delayFor(out);
-		await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
-		if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
-		return;
-      }
+	  
 
 	  if (/^!time\b/i.test(text)) {
 		const { pretty, tz } = nowInfo();
@@ -106,9 +95,25 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg } = {}) {
 	  const memoryText = recent.map(m => `${m.role === 'assistant' ? 'Charity' : (m.userName || 'User')}: ${m.text}`).join('\n');
 	  const memoryCtx  = memoryText ? [{ title: 'Recent conversation', text: memoryText }] : [];
 	  const ragCtx     = await (activeRag?.context?.(evt, memory) ?? []);
-	  const ctx        = [...memoryCtx, ...ragCtx];
-	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+	  const roleHints = guards.isGuildMaster(evt)
+		? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (BagOTrix). Address respectfully as “Guild Master” when appropriate.' }]
+		: [];
 
+	  const ctx = [...roleHints, ...memoryCtx, ...ragCtx];
+
+	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+	  if (/^!whoami\b/i.test(text)) {
+		const promptEvt = { ...evt, text:
+		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
+		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
+      };
+		const reply = await _llm.compose({ evt: promptEvt, ctx: [], persona, cfg });
+		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
+		await delayFor(out);
+		await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
+		if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
+		return;
+      }
       const reply = await _llm.compose({ evt, ctx, persona, cfg });
 
       const out = (reply?.text ?? '').trim();

@@ -13,6 +13,7 @@ A:\Charity\
     feedback.mjs
 	rag.keyword.mjs
 	rag.store.mjs
+	time.mjs					# Time awareness
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md
