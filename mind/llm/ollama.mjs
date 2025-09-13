@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { nowInfo } from '#mind/time.mjs';
 
 const DEFAULT_HOST = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
 const TIMEOUT_MS = 30_000;
@@ -17,11 +18,14 @@ function buildPrompt({ evt, ctx = [], persona = {} }) {
   const longB  = persona?.bios?.long_bio || '';
   const guild  = persona?.canon?.guild_name || 'Adventuring Guild';
 
+  const { tz, iso, pretty } = nowInfo();
+
   const sys = [
     `${name} — ${tone}. Stay concise by default; offer to expand.`,
     `Canon: The guild is called exactly "${guild}". Do not invent other guild names.`,
     shortB ? `Bio (short): ${shortB}` : '',
     longB  ? `Bio (long): ${longB}`  : '',
+    `Current time: ${pretty} (${tz}); ISO: ${iso}.`,
     `When addressing users, be kind and practical. Emote sparingly like ${emote}.`
   ].filter(Boolean).join('\n');
 
