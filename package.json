@@ -29,6 +29,7 @@
     "dev:keeper": "node ./relics/dev/keeper-8131.mjs",
     "dev:scribe": "node ./relics/dev/scribe-8132.mjs",
     "smoke:sentry": "node ./relics/smoke/sentry-aggregator-smoke.mjs"
+	"mem:backfill": "node rituals/cli/memory-backfill.mjs --days=30"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

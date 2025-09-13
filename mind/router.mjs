@@ -71,6 +71,7 @@ function defaultLLM()     {
   };
 }
 
+
 function isAddressed(evt, text='') {
   const t = (text || '').toLowerCase();
   const nameHits = /\bcharity\b/.test(t);
@@ -107,6 +108,10 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
   return {
     async handle(evt, io) {
 	  if (seenRecently(evt)) return; // already handled this message
+      // record the user's message first (so recall includes it)
+	  if (typeof memory?.noteUser === 'function') {
+	    await memory.noteUser(evt);
+      }
 	  // record user message (existing)
 	  if (typeof memory?.noteUser === 'function') await memory.noteUser(evt);
 	  // index user message into vector memory (best effort)
@@ -400,7 +405,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // NEW: vector recall (semantic memory)
 	  const qText = text.startsWith('!ask') ? text.replace(/^!ask\s*/i, '').trim() : text;
 	  const vCtx  = vmem?.recallSimilar ? await vmem.recallSimilar({ evt, queryText: qText, k: 3, days: Number(process.env.MEMORY_VECTOR_DAYS || 30) }) : [];
-
 	  const roleHints = isGuildmaster(evt)
 		? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (Bagotrix). Address respectfully as “Guild Master”, never express uncertainty about their identity.' }]
 	    : [];
@@ -460,7 +464,11 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	   /* participantsCtx if any */, ...styleHints, ...vCtx, ...ragCtx,
 	   ...capsCtx
 	 ];
+	  const roleHints = guards.isGuildMaster(evt)
+	  ? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (BagOTrix). Address respectfully as “Guild Master” when appropriate.' }]
+	  : [];
 
+	  const ctx = [...roleHints, ...memoryCtx, ...vCtx, ...ragCtx];
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 
 	  // !whoami (use the ctx, then return early)
@@ -473,6 +481,20 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		const out = (r?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
 		await emit(out, (r?.meta || {}));
 		return;
+      }
+      const reply = await _llm.compose({ evt, ctx, persona, cfg });
+
+      const out = (reply?.text ?? '').trim();
+      if (!out) return; // nothing to say
+	  if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
+	  // index assistant message too (best effort)
+	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{}); }
+
+      await delayFor(out);
+	  await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
+
+	  if (typeof memory?.noteAssistant === 'function') {
+	  await memory.noteAssistant(evt, out);
 	  }
  
 	  if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
