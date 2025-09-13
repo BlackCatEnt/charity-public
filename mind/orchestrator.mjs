@@ -5,6 +5,8 @@ import { makeOllamaLLM } from '#mind/llm/ollama.mjs';
 import { makeKeywordRag } from '#mind/rag.keyword.mjs';
 import { setRag } from '#mind/rag.store.mjs';
 import { makeSafety } from '#mind/safety.mjs';
+import { makeMemory } from '#mind/memory.mjs';
+
 
 export async function makeOrchestrator({ cfg }) {
   const halls = new Map();
@@ -15,6 +17,7 @@ export async function makeOrchestrator({ cfg }) {
   const llm = makeOllamaLLM({ model: llmModel, host: llmHost });
   const rag = await makeKeywordRag({});
   setRag(rag);
+  const memory = makeMemory();
   
   const router = createRouter({
     cfg,
@@ -22,7 +25,7 @@ export async function makeOrchestrator({ cfg }) {
     safety: makeSafety(),
     rag,
     llm,
-    memory: null // (stub for now)
+    memory
   });
 
   const io = {
