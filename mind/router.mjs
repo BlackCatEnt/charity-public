@@ -4,7 +4,6 @@ import { tryRecordFeedback } from '#mind/feedback.mjs';
 import { getRag, setRag } from '#mind/rag.store.mjs';
 import { makeKeywordRag } from '#mind/rag.keyword.mjs';
 import { nowInfo } from '#mind/time.mjs';
-import { identify } from '#mind/identity.mjs';
 import { identify, canUseIAM, recordGuildmasterId } from '#mind/identity.mjs';
 
 
