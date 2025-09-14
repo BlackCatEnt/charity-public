@@ -40,6 +40,7 @@ A:\Charity\
   codex\                        # (Config & docs)
     models.manifest.json    	# small, versioned pointers to A:\models\
     charity.config.json         # single source of truth
+	actors.json					# a tiny identity map and pass it into the LLM so she knows who’s speaking.
     README.md                   # map of metaphor → tech
   relics\                       # (Tools & scripts)
     path-checker.mjs        	# verifies manifest + filesystem

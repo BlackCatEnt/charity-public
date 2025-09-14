@@ -4,6 +4,9 @@ import { tryRecordFeedback } from '#mind/feedback.mjs';
 import { getRag, setRag } from '#mind/rag.store.mjs';
 import { makeKeywordRag } from '#mind/rag.keyword.mjs';
 import { nowInfo } from '#mind/time.mjs';
+import { identify } from '#mind/identity.mjs';
+import { identify, canUseIAM, recordGuildmasterId } from '#mind/identity.mjs';
+
 
 // Safe defaults until real services are passed in from the orchestrator.
 function defaultSafety() { return { pass: () => true }; }
@@ -52,18 +55,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
       const text = evt.text?.trim() || '';
+	  const speaker = identify(evt); // { role, name }
 
-      // Observer toggle: "!observer on|off|status"
-      if (isCurator && /^!observer\b/i.test(text)) {
-        const mode = (text.split(/\s+/)[1] || '').toLowerCase();
-        if (mode === 'on' || mode === 'off') {
-          guards.observer = (mode === 'on');
-          await io.send(evt.roomId, `Observer mode ${guards.observer ? 'ON' : 'OFF'}.`, { hall: evt.hall });
-        } else {
-          await io.send(evt.roomId, `Observer is ${guards.observer ? 'ON' : 'OFF'}.`, { hall: evt.hall });
-        }
-        return;
-      }
 	  // KB reload: "!kb reload"
 	  if (isCurator && /^!kb\s+reload\b/i.test(text)) {
 		const newRag = await makeKeywordRag({});
@@ -72,6 +65,21 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await io.send(evt.roomId, `KB reloaded (${stats.docs ?? 0} docs).`, { hall: evt.hall });
 		return;
 	  }
+	  // Observer toggle: "!observer on|off|status"
+	  if (/^!observer\b/i.test(text)) {
+		if (!guards.canObserver(evt)) {
+		await io.send(evt.roomId, 'Only moderators or the Guildmaster can use !observer.', { hall: evt.hall });
+		return;
+	  }
+	  const mode = (text.split(/\s+/)[1] || '').toLowerCase();
+	  if (mode === 'on' || mode === 'off') {
+		 guards.observer = (mode === 'on');
+		 await io.send(evt.roomId, `Observer mode ${guards.observer ? 'ON' : 'OFF'}.`, { hall: evt.hall });
+	  } else {
+		await io.send(evt.roomId, `Observer is ${guards.observer ? 'ON' : 'OFF'}.`, { hall: evt.hall });
+	  }
+	  return;
+	}
 
 
       // Feedback capture: "fb good", "fb bad", or "fb +humor -verbose note: ... "
@@ -118,14 +126,14 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
 		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
       };
-		const reply = await _llm.compose({ evt: promptEvt, ctx: [], persona, cfg });
+		const reply = await _llm.compose({ evt, ctx, persona, speaker, cfg });
 		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
 		await delayFor(out);
 		await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
 		if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
 		return;
       }
-      const reply = await _llm.compose({ evt, ctx, persona, cfg });
+      const reply = await _llm.compose({ evt, ctx, persona, speaker, cfg });
 
       const out = (reply?.text ?? '').trim();
       if (!out) return; // nothing to say

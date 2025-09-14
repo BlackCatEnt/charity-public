@@ -10,7 +10,7 @@ function controllerWithTimeout(ms = TIMEOUT_MS) {
   return { signal: c.signal, clear: () => clearTimeout(t) };
 }
 
-function buildPrompt({ evt, ctx = [], persona = {} }) {
+function buildPrompt({ evt, ctx = [], persona = {}, speaker }){
   const name   = persona?.name || 'Charity the Adventurer';
   const tone   = persona?.tone?.style || 'warm, helpful, playful, sassy';
   const emote  = persona?.tone?.emote || '✧';
@@ -18,24 +18,23 @@ function buildPrompt({ evt, ctx = [], persona = {} }) {
   const longB  = persona?.bios?.long_bio || '';
   const guild  = persona?.canon?.guild_name || 'Adventuring Guild';
 
-  const { tz, iso, pretty } = nowInfo();
-
   const sys = [
-    `${name} — ${tone}. Stay concise by default; offer to expand.`,
-    `Canon: The guild is called exactly "${guild}". Do not invent other guild names.`,
-    shortB ? `Bio (short): ${shortB}` : '',
-    longB  ? `Bio (long): ${longB}`  : '',
-    `Current time: ${pretty} (${tz}); ISO: ${iso}.`,
-    `When addressing users, be kind and practical. Emote sparingly like ${emote}.`
+    `${name} — ${tone}. Default concise; offer to expand.`,
+    `Canon: Guild name is exactly "${guild}". Do not invent other names.`,
+    shortB && `Bio (short): ${shortB}`,
+    longB  && `Bio (long): ${longB}`,
+    speaker && `Current speaker: ${speaker.role} — ${speaker.name}. Be appropriately deferential.`,
+    `Use ${emote} sparingly.`
   ].filter(Boolean).join('\n');
 
   const context = ctx.length
-    ? `\n\nContext:\n${ctx.map((c, i) => `- ${c.title || `ctx${i+1}`}: ${c.text?.slice(0, 600) || ''}`).join('\n')}`
+    ? `\n\nContext:\n${ctx.map((c,i)=>`- ${c.title || `ctx${i+1}`}: ${c.text?.slice(0,600) || ''}`).join('\n')}`
     : '';
 
   const user = (evt.text || '').trim();
   return `${sys}${context}\n\nUser: ${user}\nAssistant:`;
 }
+
 
 export function makeOllamaLLM({ model = 'llama3.1:8b-instruct-q8_0', host = DEFAULT_HOST } = {}) {
   async function generate(prompt) {
