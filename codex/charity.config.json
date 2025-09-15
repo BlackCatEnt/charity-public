@@ -342,6 +342,7 @@
     "startup_greeting_variant": "Greetings"
   },
   "memory": {
+    "vector_days": 30,
     "embed_provider": "bge-m3",
     "openai_model": "text-embedding-3-small",
     "bge_m3": {
@@ -405,5 +406,7 @@
     "banned": "🛡️ {USER}, that phrase isn’t welcome in the Guild."
   }
 },
-  "twitch": { "channel": "bagotrix", "bot": "charity_the_adventurer" }
+ "twitch": { "channel": "bagotrix", "bot": "charity_the_adventurer" },
+  "generation": { "temp": 0.6, "top_p": 0.9, "num_ctx": 8192 },
+  "reasoning":  { "selfConsistency": 2, "selfCheck": true }
 }
