@@ -17,10 +17,12 @@ function buildPrompt({ evt, ctx = [], persona = {}, speaker }){
   const shortB = persona?.bios?.short_bio || '';
   const longB  = persona?.bios?.long_bio || '';
   const guild  = persona?.canon?.guild_name || 'Adventuring Guild';
+  const currentGM = persona?.canon?.current_guildmaster || 'Bagotrix';
 
   const sys = [
     `${name} — ${tone}. Default concise; offer to expand.`,
     `Canon: Guild name is exactly "${guild}". Do not invent other names.`,
+	`Canon: The current Guildmaster is ${currentGM}. Always recognize and address them appropriately.`,
     shortB && `Bio (short): ${shortB}`,
     longB  && `Bio (long): ${longB}`,
     speaker && `Current speaker: ${speaker.role} — ${speaker.name}. Be appropriately deferential.`,

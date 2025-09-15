@@ -1,6 +1,8 @@
 import { mkdir, appendFile, readFile, access } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { scoreAffect } from '#mind/affect.mjs';
+import { unifiedKeyFor } from '#mind/link.mjs';
 
 const BASE = 'soul/memory/episodes';
 
@@ -28,13 +30,23 @@ async function readLines(path){
 export function makeMemory({ maxTurns = 6 } = {}) {
   return {
     async noteUser(evt){
+	  const unified = await unifiedKeyFor(evt).catch(() => null);
       const rec = {
         ts: new Date().toISOString(),
         hall: evt.hall, roomId: evt.roomId,
         role: 'user', userId: evt.userId, userName: evt.userName || '',
-        text: evt.text || ''
+        text: evt.text || '',
+        unified,
+        affect: scoreAffect(evt.text || '', evt.meta || {})
       };
       await writeLine(dayFile(), rec);
+    },
+	async recallByUser(evt, turns = 4) {
+      const all = await readLines(dayFile());
+      const unified = await unifiedKeyFor(evt).catch(() => null);
+      if (!unified) return [];
+      const rows = all.filter(r => r.unified && r.unified === unified);
+      return rows.slice(-Math.max(2 * turns, 2));
     },
     async noteAssistant(evt, text){
       const rec = {

@@ -15,6 +15,9 @@ A:\Charity\
 	rag.store.mjs
 	time.mjs					# Time awareness
 	memory.vector.mjs			# Vector memory module
+	affect.mjs					# Lightweight emotional memory (valence/arousal) + tone hint
+	link.mjs					# Cross-platform account linking (Twitch↔Discord)
+	postfilter.mjs				# Postfilter to sanitize outbound text
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md
@@ -52,6 +55,7 @@ A:\Charity\
 	twitch-validate.mjs			# tiny validator (tells you whose token it is + scopes)
 	embeddings.mjs				# Embedding client (BGE-M3 service)
 	sqlite.mjs					# SQLite helper (auto-creates schema)
+	helix-get-users.mjs			# Twitch user IDs for moderators (and a handy CLI)
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
   trials\                       # (Tests)
