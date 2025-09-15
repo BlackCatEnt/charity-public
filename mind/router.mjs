@@ -10,6 +10,8 @@ import { startLink, completeLink } from '#mind/link.mjs';
 import { sanitizeOut } from '#mind/postfilter.mjs';
 import { guardEventAnnouncements } from '#mind/guard.events.mjs';
 import { addEvent, listEvents, syncDiscordScheduledEvents } from '#mind/events.mjs';
+import { startWizard, stepWizard, cancelWizard, hasWizard } from '#mind/wizards/event_add.mjs';
+
 
 
 
@@ -73,7 +75,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		let out = (outText ?? '').trim();
 
 		// ⛳️ Event announcement guard
-		const guarded = await guardEventAnnouncements(out);
+		const guarded = await guardEventAnnouncements(out, evt);
         if (!guarded.ok) out = guarded.text;
 
 		// existing sanitizer
@@ -88,7 +90,12 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
       };
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
-
+	  // Feed conversational event wizard if active
+	  if (hasWizard(evt) && !/^[!.]/.test(text)) {
+	    const step = await stepWizard(evt, text);
+	    if (step.prompt) await emit(step.prompt);
+	    return;
+	  }
 	  // KB reload: "!kb reload"
 	  if (isCurator && /^!kb\s+reload\b/i.test(text)) {
 		const newRag = await makeKeywordRag({});
@@ -130,7 +137,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  if (!m) { await emit('Usage: !event add "Title" YYYY-MM-DD "Optional description"'); return; }
 	  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '' });
 	  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); return;
-	}
+	  }
 
 	  if (/^!events\s+list\b/i.test(text)) {
 	    const evs = await listEvents();
@@ -141,8 +148,11 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 
 	  if (/^!events\s+sync\b/i.test(text)) {
 	    if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can sync.'); return; }
-	    const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
-	    if (!guildId) { await emit('Missing DISCORD_GUILD_ID for sync.'); return; }
+	    const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID || '';
+		  if (!guildId) {
+		    await emit('I need a Discord guild id. Run `!events sync` **in a server channel** or set `DISCORD_GUILD_ID=<your server id>` in `.env`.', {});
+		    return;
+		  }
 	    try {
 		  const s = await syncDiscordScheduledEvents(guildId);
 		  await emit(`Synced Discord scheduled events. Added ${s.added} new (total on Discord: ${s.total}).`);
@@ -150,6 +160,17 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  await emit(`Sync failed: ${e.message}`);
 	    }
 	    return;
+	  }
+	  // Start conversational wizard
+	  if (/^!event\s+(new|add)\b/i.test(text) && !/"[^"]+"\s+\d{4}-\d{2}-\d{2}/.test(text)) {
+	    if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can add events.'); return; }
+	    await emit(startWizard(evt)); return;
+	  }
+
+	  // Cancel wizard
+	  if (/^!event\s+cancel\b/i.test(text)) {
+	    if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can cancel event creation.'); return; }
+	    await emit(cancelWizard(evt)); return;
 	  }
 
 	  // Account linking
@@ -215,12 +236,18 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
 		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
       };
-		const reply = await _llm.compose({ evt, ctx, persona, speaker, cfg, promptEvt });
+		const conversation = {
+		  isDM: !!evt.meta?.isDM,
+		  isReply: !!evt.meta?.replyToMe,
+		  mentioned: !!evt.meta?.mentionedMe
+		};
+
+		const reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg, promptEvt });
 		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
 		await emit(out, (reply?.meta || {}));
 		return;
       }
-      const reply = await _llm.compose({ evt, ctx, persona, speaker, cfg });
+      const reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
 	  await emit(reply?.text, reply?.meta);
 	  }
     }
