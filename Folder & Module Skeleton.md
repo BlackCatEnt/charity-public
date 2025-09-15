@@ -2,8 +2,11 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
-	/wizards/event_add.mjs		#  Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
-    llm\ollama.mjs		        
+	/wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
+    capabilities.mjs			# Capabilities manifest (what exists, who can use it)
+	reasoner.mjs				# (plan/check + self-consistency)
+	confidence.mjs				# Confidence gate (evidence-first)
+	llm\ollama.mjs		        
 	orchestrator.mjs
     bus.mjs
     router.mjs                  # unified message pipeline
@@ -49,7 +52,8 @@ A:\Charity\
 	actors.json					# a tiny identity map and pass it into the LLM so she knows who’s speaking.
     README.md                   # map of metaphor → tech
   relics\                       # (Tools & scripts)
-    path-checker.mjs        	# verifies manifest + filesystem
+    calc.mjs					# Tiny math/date tool route
+	path-checker.mjs        	# verifies manifest + filesystem
     publish.mjs
 	tokens.mjs
 	helix.mjs					# twitch helix client
