@@ -2,6 +2,7 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
+	/wizards/event_add.mjs		#  Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
     llm\ollama.mjs		        
 	orchestrator.mjs
     bus.mjs
@@ -18,6 +19,8 @@ A:\Charity\
 	affect.mjs					# Lightweight emotional memory (valence/arousal) + tone hint
 	link.mjs					# Cross-platform account linking (Twitch↔Discord)
 	postfilter.mjs				# Postfilter to sanitize outbound text
+	events.mjs					# Events via chat + Discord Events sync
+	guard.events.mjs			# Blocks confident "we're hosting X" style claims unless an event exists in KB.
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md

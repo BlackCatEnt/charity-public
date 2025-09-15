@@ -72,11 +72,22 @@ export default async function startHall(core, cfg){
 
   client.on('message', async (channelName, tags, message, self) => {
     if (self) return;
-    try { await core.ingest({ hall:'twitch', roomId: channelName.replace(/^#/,''),
-      userId: tags['user-id'] ?? '', userName: tags['display-name'] ?? tags['username'] ?? '',
-      text: message, ts: Date.now(), meta: { rawTags: tags } });
-    } catch (e) { console.error('[twitch] ingest error:', e?.message || e); }
-  });
+    try { 
+      const replyToMe = !!(
+       (tags['reply-parent-user-login'] && tags['reply-parent-user-login'].toLowerCase() === botUser.toLowerCase()) ||
+       (tags['reply-parent-user-id'] && tags['reply-parent-user-id'] === tags['user-id']) // fallback check
+    );
+    await core.ingest({
+      hall: 'twitch',
+      roomId: channelName.replace(/^#/, ''),
+      userId: tags['user-id'] ?? '',
+      userName: tags['display-name'] ?? tags['username'] ?? '',
+      text: message,
+      ts: Date.now(),
+      meta: { rawTags: tags, replyToMe }
+    });
+	   } catch (e) { console.error('[twitch] ingest error:', e?.message || e); }
+ });
 
   await client.connect();
 
@@ -84,4 +95,4 @@ export default async function startHall(core, cfg){
     async send(roomId, text){ await client.say(`#${roomId}`, text); },
     async stop(){ stopRefresh(); try { await client.disconnect(); } catch {} }
   };
-}
+ }
