@@ -37,6 +37,8 @@ export async function helixFetch(path, { method='GET', body=null, kind='broadcas
     const text = await res.text();
     throw new Error(`[helix] ${res.status} ${text}`);
   }
+  // DELETE endpoints often return 204 (no content)
+  if (res.status === 204) return { status: 204 };
   return res.json();
 }
 
@@ -50,4 +52,41 @@ export async function getUserByLogin(login, kind='broadcaster') {
 // optional: call this once at boot to keep broadcaster token fresh in background
 export function keepBroadcasterFresh() {
   return scheduleTwitchAutoRefresh('broadcaster', 45 * 60 * 1000);
+}
+
+// ---------- NEW: moderation helpers ----------
+const BID = process.env.TWITCH_BROADCASTER_ID;      // your channel’s user id
+const MID = process.env.TWITCH_BOT_USER_ID || BID;  // the bot’s user id (must be a mod)
+
+// Delete a single chat message by id
+export async function helixDeleteMessage({ msgId, broadcasterId = BID, moderatorId = MID, kind = 'bot' }) {
+  if (!msgId) throw new Error('helixDeleteMessage: msgId required');
+  const q = new URLSearchParams({
+    broadcaster_id: String(broadcasterId),
+    moderator_id:   String(moderatorId),
+    message_id:     String(msgId)
+  });
+  // DELETE /moderation/chat
+  return helixFetch(`/moderation/chat?${q}`, { method: 'DELETE', kind });
+}
+
+// Timeout (ban for N seconds)
+export async function helixTimeoutUser({ userId, secs = 300, reason = '', broadcasterId = BID, moderatorId = MID, kind = 'bot' }) {
+  if (!userId) throw new Error('helixTimeoutUser: userId required');
+  const q = new URLSearchParams({
+    broadcaster_id: String(broadcasterId),
+    moderator_id:   String(moderatorId)
+  });
+  const body = { data: { user_id: String(userId), duration: Math.max(1, Math.floor(secs)), reason: reason?.slice(0, 500) || undefined } };
+  // POST /moderation/bans
+  return helixFetch(`/moderation/bans?${q}`, { method: 'POST', body, kind });
+}
+
+// (nice-to-have used by emote sync; add if you don’t already have them)
+export async function helixGetChannelEmotes({ broadcasterId = BID, kind = 'bot' } = {}) {
+  const q = new URLSearchParams({ broadcaster_id: String(broadcasterId) });
+  return helixFetch(`/chat/emotes?${q}`, { kind });
+}
+export async function helixGetGlobalEmotes({ kind = 'bot' } = {}) {
+  return helixFetch('/chat/emotes/global', { kind });
 }

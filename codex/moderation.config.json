@@ -6,8 +6,8 @@
     "spam":    { "delete": true, "timeoutSecs": 120 }
   },
   "spoilers": {
-    "active_game": "",            // set with !game set "Title"
-    "strict": true,               // if true, treat likely spoilers as violations
+    "active_game": "",           
+    "strict": true,               
     "keywords": ["ending", "final boss", "true ending", "plot twist", "betrays",
                  "dies", "secret ending", "post-credits", "chapter", "act "]
   }

@@ -6,28 +6,7 @@ import { validateTwitch } from '#relics/twitch-validate.mjs';
 import { evaluateMessage } from '#mind/moderation.mjs';
 import { moderate } from './mod.actions.mjs';
 
-client.on('message', async (channel, tags, msg, self) => {
-  if (self) return;
-  const evt = {
-    hall: 'twitch',
-    roomId: channel.replace('#',''),
-    userId: tags['user-id'],
-    userName: tags['username'],
-    text: msg,
-    meta: { messageId: tags['id'], isMod: tags.mod === true || (tags.badges && 'broadcaster' in tags.badges) }
-  };
 
-  try {
-    const decision = await evaluateMessage(evt, msg);
-    if (!decision.ok) {
-      await moderate(io, evt, decision, _llm);   // do the mod action + sassy message
-      // still ingest for memory (optional): you may mark it as moderated
-    }
-  } catch(e) { console.warn('[mod]', e.message); }
-
-  // continue the normal pipeline
-  orchestrator.ingest(evt).catch(()=>{});
-});
 
 
 function toUnified({ channel, tags, message }){
