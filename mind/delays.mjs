@@ -1,5 +1,8 @@
-const cfg = { base: 200, perChar: 15, max: 1500, jitter: 200 };
-export const delayFor = async (text='') => new Promise(r => {
-  const ms = Math.min(cfg.max, cfg.base + text.length * cfg.perChar + Math.random()*cfg.jitter);
-  setTimeout(r, ms);
-});
+export async function delayFor(text='') {
+  const chars = text.length;
+  const base = 450;          // was lower
+  const perChar = 28;        // ms/char
+  const jitter = Math.random() * 250;
+  const ms = Math.min(3500, base + chars * perChar + jitter);
+  return new Promise(r => setTimeout(r, ms));
+}

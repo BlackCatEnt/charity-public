@@ -13,7 +13,7 @@ export async function makeOrchestrator({ cfg }) {
   const halls = new Map();
 
   // LLM from manifest (engine=ollama)
-  const llmModel = manifest?.llm?.model || 'llama3.1:8b-instruct-q8_0';
+  const llmModel = manifest?.llm?.model || 'llama3.1:8b-instruct-q6_K';
   const llmHost  = (process.env.OLLAMA_HOST || manifest?.llm?.host || 'http://127.0.0.1:11434');
   const llm = makeOllamaLLM({ model: llmModel, host: llmHost });
   const rag = await makeKeywordRag({});

@@ -1,16 +1,4 @@
-import 'dotenv/config';
-import { nowInfo } from '#mind/time.mjs';
-
-const DEFAULT_HOST = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
-const TIMEOUT_MS = 30_000;
-
-function controllerWithTimeout(ms = TIMEOUT_MS) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms);
-  return { signal: c.signal, clear: () => clearTimeout(t) };
-}
-
-function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {} }){
+function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {}, caps = '' }){
   const name   = persona?.name || 'Charity the Adventurer';
   const tone   = persona?.tone?.style || 'warm, helpful, playful, sassy';
   const emote  = persona?.tone?.emote || '✧';
@@ -22,11 +10,16 @@ function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {} }
   const sys = [
     `${name} — ${tone}. Default concise; offer to expand.`,
     `Canon: Guild name is exactly "${guild}". Do not invent other names.`,
-	`Canon: The current Guildmaster is ${currentGM}. Always recognize and address them appropriately.`,
+    `Canon: The current Guildmaster is ${currentGM}. Always recognize and address them appropriately.`,
     shortB && `Bio (short): ${shortB}`,
     longB  && `Bio (long): ${longB}`,
     speaker && `Current speaker: ${speaker.role} — ${speaker.name}. Be appropriately deferential.`,
-    `Use ${emote} sparingly.`
+    'Do not fabricate names of guild members. If none are provided in context, speak generally (e.g., “a few members”, “several folks”).',
+    'When names are provided, only refer to those.',
+	rules.kb_vocab || 'Refer to the knowledge base as “the Codex”.'
+    `Use ${emote} sparingly.`,
+    caps ? `Capabilities:\n${caps}` : null, // ✅ comma added, guarded string
+    'If a capability clearly applies, start your first line with: PLAN: <cap_id> <args>. Otherwise answer normally.'
   ].filter(Boolean).join('\n');
 
   const context = ctx.length
@@ -36,9 +29,17 @@ function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {} }
   const user = (evt.text || '').trim();
   return `${sys}${context}\n\nUser: ${user}\nAssistant:`;
 }
+// Simple fetch timeout helper for Node 18+ (AbortController is global)
+function controllerWithTimeout(ms = 20000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  return {
+    signal: ac.signal,
+    clear: () => clearTimeout(t)
+  };
+}
 
-
-export function makeOllamaLLM({ model = 'llama3.1:8b-instruct-q8_0', host = DEFAULT_HOST } = {}) {
+export function makeOllamaLLM({ model = 'llama3.1:8b-instruct-q6_K', host = DEFAULT_HOST } = {}) {
   async function generate(prompt) {
     const url = `${host}/api/generate`;
     const body = { model, prompt, stream: false };
@@ -61,11 +62,9 @@ export function makeOllamaLLM({ model = 'llama3.1:8b-instruct-q8_0', host = DEFA
   }
 
   return {
-    /**
-     * compose({ evt, ctx, persona, cfg }) -> { text, meta }
-     */
-    async compose({ evt, ctx, persona }) {
-      const prompt = buildPrompt({ evt, ctx, persona });
+    // compose({ evt, ctx, persona, speaker, conversation, cfg, caps }) -> { text, meta }
+    async compose({ evt, ctx, persona, speaker, conversation, cfg = {}, caps = '' }) {
+      const prompt = buildPrompt({ evt, ctx, persona, speaker, conversation, caps });
       const text = await generate(prompt);
       return { text, meta: { model } };
     }

@@ -7,12 +7,15 @@ import { nowInfo } from '#mind/time.mjs';
 import { identify, canUseIAM, recordGuildmasterId, isGuildmaster } from '#mind/identity.mjs';
 import { summarizeRecentAffect } from '#mind/affect.mjs';
 import { startLink, completeLink } from '#mind/link.mjs';
-import { sanitizeOut } from '#mind/postfilter.mjs';
 import { guardEventAnnouncements } from '#mind/guard.events.mjs';
 import { addEvent, listEvents, syncDiscordScheduledEvents } from '#mind/events.mjs';
 import { startWizard, stepWizard, cancelWizard, hasWizard } from '#mind/wizards/event_add.mjs';
-
-
+import { startWhy, whyAdd, whyCtx, whyPost, getWhy } from '#mind/why.mjs';
+import { sanitizeOut, deaddress, enforceConcise } from '#mind/postfilter.mjs';
+import { deliberate } from '#mind/reasoner.mjs';
+import { ragConfidence, lowConfidencePrompt } from '#mind/confidence.mjs';
+import { isCalcQuery, calcInline } from '#relics/calc.mjs';
+import { CAPABILITIES, summarizeCapabilities, allowedFor } from '#mind/capabilities.mjs';
 
 
 // Safe defaults until real services are passed in from the orchestrator.
@@ -68,26 +71,64 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
       const isCurator = guards.isCurator(evt);
       const text = evt.text?.trim() || '';
 	  const speaker = identify(evt); // { role, name }
-	  const emit = async (outText, meta = {}) => {
-		const allowed = persona?.conduct?.allowed_emotes || [];
-		const allowPurr = persona?.conduct?.allow_purr ?? false;
+	  const conversation = {
+		  isDM: !!evt.meta?.isDM,
+		  isReply: !!evt.meta?.replyToMe,
+		  mentioned: !!evt.meta?.mentionedMe
+	  };
+	  // lightweight trace of *inputs* that shaped this reply
+	  const _conv = { isDM: !!evt.meta?.isDM, isReply: !!evt.meta?.replyToMe, mentioned: !!evt.meta?.mentionedMe };
+	  const _why = startWhy(evt);
+	  whyAdd(evt, {
+	    addressed: {
+	    observer: !!guards.observer,
+        reason: _conv.isDM ? 'dm' :
+            _conv.isReply ? 'reply' :
+            _conv.mentioned ? 'mention' :
+            (/^[!.]/.test(text) ? 'command' : 'open')
+        }
+      });
+	const emit = async (outText, meta = {}) => {
+	  const allowed   = persona?.conduct?.allowed_emotes || [];
+	  const allowPurr = persona?.conduct?.allow_purr ?? false;
 
-		let out = (outText ?? '').trim();
+	  // 1) start with the raw reply
+	  let out = (outText ?? '').trim();
+	  if (!out) return;
 
-		// ⛳️ Event announcement guard
-		const guarded = await guardEventAnnouncements(out, evt);
-        if (!guarded.ok) out = guarded.text;
+	  // 2) event guard on the raw text
+	  const guarded = await guardEventAnnouncements(out, evt);
+	  if (!guarded.ok) {
+		out = guarded.text;
+		whyPost(evt, { guardedEvent: true });
+	  }
 
-		// existing sanitizer
-		out = sanitizeOut(out, { allowedEmotes: allowed, allowPurr });
-		if (!out) return;
+	  // 3) postfilters (sanitize → deaddress → concise)
+	  const beforeLen = out.length;
 
-		await delayFor(out);
-		await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
+	  out = sanitizeOut(out, { allowedEmotes: allowed, allowPurr });
+	  out = deaddress(out, { isDM: conversation.isDM, isReply: conversation.isReply });
+	  out = enforceConcise(out, {
+		maxSentences: persona?.reply_prefs?.concise_sentences ?? 2,
+		maxChars:     persona?.reply_prefs?.concise_max_chars ?? 280
+	  });
 
-		await memory?.noteAssistant?.(evt, out);
-		if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
-      };
+	  if (!out) return;
+
+	  const afterLen = out.length;
+	  whyPost(evt, {
+		trimmed: afterLen < beforeLen,
+		deaddressed: !!evt.meta?.isDM || !!evt.meta?.replyToMe
+	  });
+
+	  // 4) deliver + log
+	  await delayFor(out);
+	  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
+
+	  await memory?.noteAssistant?.(evt, out);
+	  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(() => {});
+	};
+
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
 	  // Feed conversational event wizard if active
@@ -119,7 +160,24 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  }
 	  return;
 	}
+   	  if (/^!why\b/i.test(text)) {
+	    if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can view the why-trace.', { noMoreHint: true }); return; }
+	    const w = getWhy(evt);
+	    if (!w) { await emit('No recent trace for this room. Ask something, then `!why`.', { noMoreHint: true }); return; }
 
+	    const lines = [
+		  `when: ${w.ts}`,
+		  `addressed: ${w.addressed.reason} (observer=${w.addressed.observer})`,
+		  `style: dm=${w.style.isDM} reply=${w.style.isReply} mention=${w.style.mentioned}`,
+		  `ctx: memory=${w.ctx.memory} userLinked=${w.ctx.userLinked}`,
+		  w.ctx.participants ? `participants: ${w.ctx.participants}` : null,
+		  w.ctx.sources?.length ? `sources: ${w.ctx.sources.join(' | ')}` : 'sources: none',
+		  `postfilter: trimmed=${w.postfilter.trimmed} deaddressed=${w.postfilter.deaddressed} guardedEvent=${w.postfilter.guardedEvent}`
+	    ].filter(Boolean);
+
+	    await emit('why-trace:\n' + lines.join('\n'), { noMoreHint: true });
+	    return;
+      }
 
       // Feedback capture: "fb good", "fb bad", or "fb +humor -verbose note: ... "
       if (isCurator && text.toLowerCase().startsWith('fb ')) {
@@ -200,7 +258,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 
       // ===== Normal pipeline =====
       if (!_safety.pass(evt)) return;
-
+    
+	// Build context first (so commands like !whoami can use it)
 	  const activeRag = getRag?.() || _rag;
 	  const recent = (typeof memory?.recall === 'function') ? await memory.recall(evt, 6) : [];
       const userRecent = (typeof memory?.recallByUser === 'function') ? await memory.recallByUser(evt, 4) : [];
@@ -227,28 +286,96 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  const roleHints = isGuildmaster(evt)
 		? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (Bagotrix). Address respectfully as “Guild Master”, never express uncertainty about their identity.' }]
 	    : [];
+	  // Example: you likely have these around already; fall back if missing
+	  const recentCount     = Array.isArray(recent)     ? recent.length     : 0;
+	  const userRecentCount = Array.isArray(userRecent) ? userRecent.length : 0;
+	  const sourceTitles    = [...(vCtx||[]), ...(ragCtx||[])].map(c => c.title).filter(Boolean);
 
-	  const ctx = [...roleHints, ...moodHint, ...memoryCtx, ...userCtx, ...vCtx, ...ragCtx];
-	 
+	  whyCtx(evt, {
+	    memory: recentCount,
+	    userLinked: userRecentCount,
+	    sources: sourceTitles
+  	  });
+	  // If you build a participantsCtx, you can also record it:
+	  if (typeof participantsCtx !== 'undefined' && Array.isArray(participantsCtx) && participantsCtx[0]?.text) {
+	    whyCtx(evt, { participants: participantsCtx[0].text });
+	  }
+
+	 const capsText = summarizeCapabilities();
+	 const capsCtx  = [{ title: 'Capabilities', text: capsText }];
+
+	 const ctx = [...roleHints, ...moodHint, ...memoryCtx, ...userCtx, /* participantsCtx if you use it */ ...vCtx, ...ragCtx, ...capsCtx];
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+
+	  // !whoami (use the ctx, then return early)
 	  if (/^!whoami\b/i.test(text)) {
 		const promptEvt = { ...evt, text:
 		  "Introduce yourself to the Guild in 2–3 lines using your bio and canon. " +
 		  "Speak in your own voice, not as a definition. Avoid quoting bios verbatim."
-      };
-		const conversation = {
-		  isDM: !!evt.meta?.isDM,
-		  isReply: !!evt.meta?.replyToMe,
-		  mentioned: !!evt.meta?.mentionedMe
 		};
-
-		const reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg, promptEvt });
-		const out = (reply?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
-		await emit(out, (reply?.meta || {}));
+		const r = await _llm.compose({ evt: promptEvt, ctx, persona, speaker, conversation, cfg });
+		const out = (r?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
+		await emit(out, (r?.meta || {}));
 		return;
-      }
-      const reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
-	  await emit(reply?.text, reply?.meta);
 	  }
+	  // Option A) calculator route for simple math/date phrasing
+	  if (isCalcQuery(text)) {
+	    const r = calcInline(text);
+  	    if (r) { await emit(`≈ ${r}`); return; }
+	  }
+
+	  // Choose pipeline: normal vs deliberate
+	  const wantReason = (process.env.REASONING_DEFAULT === 'on')
+	    || /\b(why|compare|pros|cons|strategy|plan|steps|trade-?offs?)\b/i.test(text);
+
+	  let reply;
+	  if (wantReason) {
+	    // confidence gate: if low, ask concise clarifier instead of guessing
+	    const conf = ragConfidence([...vCtx, ...ragCtx], { min: 2, thresh: 0.55 });
+	    if (!conf.ok) { await emit(lowConfidencePrompt({ question: 'what specific topic/source should I check?' })); return; }
+
+	    reply = await deliberate({ _llm, evt, ctx, persona, speaker, conversation, caps: capsText,
+		  cfg: { reasoning: { selfConsistency: 2, selfCheck: true }, temp: 0.6 } });
+		const plan = (reply?.text || '').match(/^PLAN:\s*([a-z0-9_.-]+)(?:\s+(.*))?/i);
+		if (plan) {
+		  const capId = plan[1], args = plan[2] || '';
+		  const cap = CAPABILITIES.find(c => c.id === capId);
+		  if (!allowedFor(evt, cap, { guards })) { await emit('I can’t run that action here.', { noMoreHint: true }); return; }
+
+		  switch (capId) {
+			case 'events.add': {
+			  const m = args.match(/"([^"]+)"\s+(\d{4}-\d{2}-\d{2})(?:\s+"([^"]+)")?/);
+			  if (!m) { await emit('Usage: !event add "Title" YYYY-MM-DD "Optional description"'); return; }
+			  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '', source: 'plan' });
+			  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); return;
+			}
+			case 'events.list': {
+			  const evs = await listEvents(); const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
+			  await emit(lines.length ? `Latest events:\n${lines.join('\n')}` : 'No events in the Codex.'); return;
+			}
+			case 'events.sync': {
+			  const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
+			  if (!guildId) { await emit('Missing DISCORD_GUILD_ID.'); return; }
+			  const s = await syncDiscordScheduledEvents(guildId);
+			  await emit(`Synced Discord events. Added ${s.added} new.`); return;
+			}
+			case 'kb.reload': {
+			  const ok = await _rag?.reload?.().catch(() => false);
+			  await emit(ok ? 'Codex reloaded.' : 'Reload attempted.'); return;
+			}
+			case 'observer.set': {
+			  const on = /\bon\b/i.test(args);
+			  if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can change Observer.'); return; }
+			  guards.observer = on; await emit(`Observer mode ${on ? 'ON' : 'OFF'}.`); return;
+			}
+		  }
+		}
+
+	  } else {
+	    reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
+	  }
+
+	  await emit(reply?.text, reply?.meta);
     }
+  }
 }
