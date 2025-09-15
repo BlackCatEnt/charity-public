@@ -10,7 +10,7 @@ function controllerWithTimeout(ms = TIMEOUT_MS) {
   return { signal: c.signal, clear: () => clearTimeout(t) };
 }
 
-function buildPrompt({ evt, ctx = [], persona = {}, speaker }){
+function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {} }){
   const name   = persona?.name || 'Charity the Adventurer';
   const tone   = persona?.tone?.style || 'warm, helpful, playful, sassy';
   const emote  = persona?.tone?.emote || '✧';
