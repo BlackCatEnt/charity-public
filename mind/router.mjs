@@ -76,14 +76,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
       };
 
-		await delayFor(out);
-		await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
-
-		// record + (optional) vector index
-		await memory?.noteAssistant?.(evt, out);
-		if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
-	  };
-
 	  // KB reload: "!kb reload"
 	  if (isCurator && /^!kb\s+reload\b/i.test(text)) {
 		const newRag = await makeKeywordRag({});
@@ -190,5 +182,4 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  await emit(reply?.text, reply?.meta);
 	  }
     }
-  };
 }
