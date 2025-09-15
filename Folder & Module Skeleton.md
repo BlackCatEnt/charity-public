@@ -2,6 +2,7 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
+	emotes.pick.mjs				# Light chooser
 	moderation.mjs				# Evaluator (decides if a message violates)
 	wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
     capabilities.mjs			# Capabilities manifest (what exists, who can use it)
@@ -33,12 +34,15 @@ A:\Charity\
     kb\                         # knowledge base, chunks, provenance
 	kb\index\               	# vector stores (gitignored)
     kb\charity-northstar.jsonl  
+	kb\games.jsonl				# Local KB format
 	memory\episodes\            # episodic logs
     cache\
 	cache\onnxrt\           	# onnx/tensorrt runtime caches (gitignored)	
 	games\igdb.mjs				# Game knowledge for spoiler checks
+	games\index.mjs				# Games: facade (switches source)
   rituals\                      # (Training & curation)
-    feedback\2025-09\           # realtime thumbs/tags as JSONL
+    modlog\writer.mjs			# Modlog (JSONL per day)
+	feedback\2025-09\           # realtime thumbs/tags as JSONL
     feedback\writer.mjs			# 
 	snapshots\weekly\
     cli\charity-cli.mjs         # dataset:snapshot|load|rollback|health
@@ -69,6 +73,7 @@ A:\Charity\
 	helix-get-users.mjs			# Twitch user IDs for moderators (and a handy CLI)
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
+	emotes.mjs					# Emote awareness (Discord + Twitch)
   trials\                       # (Tests)
     e2e\
     unit\

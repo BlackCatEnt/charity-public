@@ -1,14 +1,33 @@
 {
   "enabled": true,
   "actions": {
-    "spoiler": { "delete": true, "timeoutSecs": 300 },
-    "slur":    { "delete": true, "timeoutSecs": 600 },
-    "spam":    { "delete": true, "timeoutSecs": 120 }
+    "spoiler": {
+      "delete": true,
+      "timeoutSecs": 300
+    },
+    "slur": {
+      "delete": true,
+      "timeoutSecs": 600
+    },
+    "spam": {
+      "delete": true,
+      "timeoutSecs": 120
+    }
   },
   "spoilers": {
-    "active_game": "",           
-    "strict": true,               
-    "keywords": ["ending", "final boss", "true ending", "plot twist", "betrays",
-                 "dies", "secret ending", "post-credits", "chapter", "act "]
+    "active_game": "Super Mario RPG",
+    "strict": true,
+    "keywords": [
+      "ending",
+      "final boss",
+      "true ending",
+      "plot twist",
+      "betrays",
+      "dies",
+      "secret ending",
+      "post-credits",
+      "chapter",
+      "act "
+    ]
   }
 }
