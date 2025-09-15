@@ -2,7 +2,8 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
-	/wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
+	moderation.mjs				# Evaluator (decides if a message violates)
+	wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
     capabilities.mjs			# Capabilities manifest (what exists, who can use it)
 	reasoner.mjs				# (plan/check + self-consistency)
 	confidence.mjs				# Confidence gate (evidence-first)
@@ -35,6 +36,7 @@ A:\Charity\
 	memory\episodes\            # episodic logs
     cache\
 	cache\onnxrt\           	# onnx/tensorrt runtime caches (gitignored)	
+	games\igdb.mjs				# Game knowledge for spoiler checks
   rituals\                      # (Training & curation)
     feedback\2025-09\           # realtime thumbs/tags as JSONL
     feedback\writer.mjs			# 
@@ -44,10 +46,12 @@ A:\Charity\
 	cli\memory-backfill.mjs		# Backfill CLI (index past episodic logs)
   halls\                        # (Platform adapters)
     twitch\adapter.mjs
+	twitch\mod.actions.mjs		# Act on violations (delete/timeout + sassy explain)
     discord\adapter.mjs
     shared\normalizers.mjs      # platform→unified event
   codex\                        # (Config & docs)
-    models.manifest.json    	# small, versioned pointers to A:\models\
+    moderation.config.json		# Config (what’s allowed + actions)
+	models.manifest.json    	# small, versioned pointers to A:\models\
     charity.config.json         # single source of truth
 	actors.json					# a tiny identity map and pass it into the LLM so she knows who’s speaking.
     README.md                   # map of metaphor → tech

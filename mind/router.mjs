@@ -55,6 +55,20 @@ function isAddressed(evt, text='') {
   return nameHits || cmd || replyHit || mentionHit || !!evt.meta?.isDM;
 }
 
+// Minimal per-hall deduper (message id or hash), 30s TTL
+const RECENT = new Map(); // key -> ts
+function keyOf(evt) {
+  return `${evt.hall}:${evt.meta?.messageId || ''}:${evt.userId || ''}:${(evt.text || '').slice(0,64)}`;
+}
+function seenRecently(evt, ttlMs = 30_000) {
+  const k = keyOf(evt);
+  const now = Date.now();
+  const last = RECENT.get(k);
+  RECENT.set(k, now);
+  if (RECENT.size > 500) for (const [kk, ts] of RECENT) if (now - ts > ttlMs) RECENT.delete(kk);
+  return last && (now - last) < ttlMs;
+}
+
 export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = {}) {
   const _safety = safety ?? defaultSafety();
   const _rag    = rag    ?? defaultRag();
@@ -62,6 +76,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 
   return {
     async handle(evt, io) {
+	  if (seenRecently(evt)) return; // already handled this message
 	  // record user message (existing)
 	  if (typeof memory?.noteUser === 'function') await memory.noteUser(evt);
 	  // index user message into vector memory (best effort)
@@ -303,8 +318,43 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 
 	 const capsText = summarizeCapabilities();
 	 const capsCtx  = [{ title: 'Capabilities', text: capsText }];
+	 const isQuestion =
+	   /[?]\s*$/.test(text) ||
+	   /^\s*(who|what|when|where|why|how|which|do|does|did|can|could|will|would|are|is|was|were|should|shall)\b/i.test(text);
+	   
+     const styleHints = [];
+	 if (isQuestion) {
+	   styleHints.push({
+	 	 title: 'Answer-first',
+	 	 text: 'Begin with the direct answer in the first sentence. 1–2 sentences total; if unknown, say so briefly.'
+	    });
+	   // slightly cooler sampling for crisp answers
+	   cfg = { ...cfg, temp: Math.min(0.45, cfg?.temp ?? 0.6) };
+	  }
+	    if (isQuestion) {
+    styleHints.push({
+      title: 'Answer-first',
+      text: 'Begin with the direct answer in the first sentence. 1–2 sentences total; if unknown, say so briefly.'
+    });
+    cfg = { ...cfg, temp: Math.min(0.45, cfg?.temp ?? 0.6) };
+  }
 
-	 const ctx = [...roleHints, ...moodHint, ...memoryCtx, ...userCtx, /* participantsCtx if you use it */ ...vCtx, ...ragCtx, ...capsCtx];
+	 // --- Answer-first post-compose enforcement (runs only on prefaced answers) ---
+	 function looksPrefacey(s = '') {
+	   return /^(ah|oh|well|indeed|sure|absolutely|great question|i(?:'| a)m (?:glad|happy) you asked|good question|as for|regarding)\b/i
+		 .test(s.trim());
+	 }
+	 async function enforceAnswerFirstText(text) {
+	   if (!isQuestion || !looksPrefacey(text || '')) return text;
+	   const r = await _llm.compose({
+		 evt: { ...evt, text: `Rewrite to answer the user's question directly in the first sentence. Max 2 sentences. Remove any preface:\n\n${text}` },
+		 ctx: [], persona, speaker, conversation,
+		 cfg: { temp: 0.2, max_tokens: 120 }
+	   });
+	   return (r?.text || text).trim();
+	 }
+
+	 const ctx = [...roleHints, ...moodHint, ...memoryCtx, ...userCtx, /* participantsCtx if you use it */ ...styleHints, ...vCtx, ...ragCtx, ...capsCtx];
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 
 	  // !whoami (use the ctx, then return early)
@@ -318,6 +368,29 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await emit(out, (r?.meta || {}));
 		return;
 	  }
+		  // !game set "Title"
+	  if (/^!game\s+set\s+"([^"]+)"/i.test(text) && guards.canObserver(evt)) {
+	    const g = text.match(/^!game\s+set\s+"([^"]+)"/i)[1];
+	    await updateConfig('moderation.config.json', draft => { draft.spoilers.active_game = g; });
+	    await emit(`Noted. Active game is now **${g}**. Spoiler filters armed. ✧`);
+	    return;
+	  }
+ 
+	if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
+	  const on = /on/i.test(text);
+	  await updateConfig('moderation.config.json', d => { d.enabled = on; });
+	  await emit(`Spoiler moderation ${on?'ON':'OFF'}.`);
+	  return;
+	}
+	if (/^!emotes\s+sync\b/i.test(text) && guards.canObserver(evt)) {
+	  const tw = await syncTwitchEmotes({ channelId: process.env.TWITCH_BROADCASTER_ID }).catch(()=>[]);
+	  const dd = evt.meta?.discordClient ? await syncDiscordEmotes(evt.meta.discordClient, process.env.DISCORD_GUILD_ID) : [];
+	  await saveJSON('soul/cache/emotes.twitch.json', tw);
+	  await saveJSON('soul/cache/emotes.discord.json', dd);
+	  await emit(`Synced ${tw.length} Twitch and ${dd.length} Discord emotes. ✧`);
+	  return;
+	}
+
 	  // Option A) calculator route for simple math/date phrasing
 	  if (isCalcQuery(text)) {
 	    const r = calcInline(text);
@@ -368,6 +441,9 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 			  if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can change Observer.'); return; }
 			  guards.observer = on; await emit(`Observer mode ${on ? 'ON' : 'OFF'}.`); return;
 			}
+			// Fallback when plan exists but didn’t match any case (unknown cap or bad args):
+			await emit(`I can run ${capId}, but I need proper args. Try: ${cap?.usage ?? 'check help'}.`);
+			return;  // << prevent emitting the raw PLAN text below
 		  }
 		}
 
@@ -375,7 +451,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	    reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
 	  }
 
-	  await emit(reply?.text, reply?.meta);
+      if (reply?.text) reply.text = await enforceAnswerFirstText(reply.text);
+      await emit(reply.text, reply?.meta);
     }
   }
 }
