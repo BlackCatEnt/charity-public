@@ -16,7 +16,30 @@ import { deliberate } from '#mind/reasoner.mjs';
 import { ragConfidence, lowConfidencePrompt } from '#mind/confidence.mjs';
 import { isCalcQuery, calcInline } from '#relics/calc.mjs';
 import { CAPABILITIES, summarizeCapabilities, allowedFor } from '#mind/capabilities.mjs';
+import { syncTwitchEmotes, syncDiscordEmotes } from '#sentry/emotes.mjs';
 
+
+// -- simple JSON helpers (local) ---------------------------------------------
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
+async function readJSONSafe(p, fallback = {}) {
+  try { return JSON.parse(await readFile(p, 'utf8')); }
+  catch { return fallback; }
+}
+async function saveJSON(p, data) {
+  await mkdir(dirname(p), { recursive: true });
+  await writeFile(p, JSON.stringify(data, null, 2), 'utf8');
+  return p;
+}
+/** Update a JSON config file (defaults to codex/ when only a filename is given) */
+async function updateConfig(relOrPath, mutate) {
+  const p = /[\\/]/.test(relOrPath) ? relOrPath : `codex/${relOrPath}`;
+  const cur = await readJSONSafe(p, {});
+  const next = (await mutate?.(cur)) ?? cur;
+  await saveJSON(p, next);
+  return next;
+}
 
 // Safe defaults until real services are passed in from the orchestrator.
 function defaultSafety() { return { pass: () => true }; }
@@ -85,64 +108,89 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
       const text = evt.text?.trim() || '';
-	  const speaker = identify(evt); // { role, name }
-	  const conversation = {
+	  
+	  // was below; move it up here
+		const speaker = identify(evt); // { role, name }
+		const conversation = {
 		  isDM: !!evt.meta?.isDM,
 		  isReply: !!evt.meta?.replyToMe,
 		  mentioned: !!evt.meta?.mentionedMe
-	  };
-	  // lightweight trace of *inputs* that shaped this reply
-	  const _conv = { isDM: !!evt.meta?.isDM, isReply: !!evt.meta?.replyToMe, mentioned: !!evt.meta?.mentionedMe };
-	  const _why = startWhy(evt);
-	  whyAdd(evt, {
-	    addressed: {
-	    observer: !!guards.observer,
-        reason: _conv.isDM ? 'dm' :
-            _conv.isReply ? 'reply' :
-            _conv.mentioned ? 'mention' :
-            (/^[!.]/.test(text) ? 'command' : 'open')
-        }
-      });
-	const emit = async (outText, meta = {}) => {
-	  const allowed   = persona?.conduct?.allowed_emotes || [];
-	  const allowPurr = persona?.conduct?.allow_purr ?? false;
+		};
 
-	  // 1) start with the raw reply
-	  let out = (outText ?? '').trim();
-	  if (!out) return;
+		// why-trace seed (emit uses whyPost)
+		const _conv = { isDM: conversation.isDM, isReply: conversation.isReply, mentioned: conversation.mentioned };
+		const _why = startWhy(evt);
+		whyAdd(evt, {
+		  addressed: {
+			observer: !!guards.observer,
+			reason: _conv.isDM ? 'dm' :
+					_conv.isReply ? 'reply' :
+					_conv.mentioned ? 'mention' :
+					(/^[!.]/.test(text) ? 'command' : 'open')
+		  }
+		});
 
-	  // 2) event guard on the raw text
-	  const guarded = await guardEventAnnouncements(out, evt);
-	  if (!guarded.ok) {
-		out = guarded.text;
-		whyPost(evt, { guardedEvent: true });
-	  }
+		// define emit BEFORE any branch uses it
+		const emit = async (outText, meta = {}) => {
+		  const allowed   = persona?.conduct?.allowed_emotes || [];
+		  const allowPurr = persona?.conduct?.allow_purr ?? false;
+		  let out = (outText ?? '').trim();
+		  if (!out) return;
 
-	  // 3) postfilters (sanitize → deaddress → concise)
-	  const beforeLen = out.length;
+         // guard still runs even in raw mode (we don't want hidden event announcements)
+          const guarded = await guardEventAnnouncements(out, evt);
+          if (!guarded.ok) { out = guarded.text; whyPost(evt, { guardedEvent: true }); }
 
-	  out = sanitizeOut(out, { allowedEmotes: allowed, allowPurr });
-	  out = deaddress(out, { isDM: conversation.isDM, isReply: conversation.isReply });
-	  out = enforceConcise(out, {
-		maxSentences: persona?.reply_prefs?.concise_sentences ?? 2,
-		maxChars:     persona?.reply_prefs?.concise_max_chars ?? 280
-	  });
+	     // meta.raw === true => skip postfilters (for precise system echoes)
+	    const beforeLen = out.length;
+	    if (!meta.raw) {
+		 out = sanitizeOut(out, { allowedEmotes: allowed, allowPurr });
+		 out = deaddress(out, { isDM: conversation.isDM, isReply: conversation.isReply });
+		 out = enforceConcise(out, {
+		   maxSentences: persona?.reply_prefs?.concise_sentences ?? 2,
+		   maxChars:     persona?.reply_prefs?.concise_max_chars ?? 280
+		 });
+		 if (!out) return;
+		 whyPost(evt, { trimmed: out.length < beforeLen, deaddressed: conversation.isDM || conversation.isReply });
+   	     }
+   // (whyPost already handled above for non-raw)
 
-	  if (!out) return;
+		  await delayFor(out);
+		  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
+		  await memory?.noteAssistant?.(evt, out);
+		  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
+		};
+	  
+	  // near the top of handle(), right after you compute `text`
+			  // --- set active game (quoted or unquoted) ---
+		const mGameSet = text.match(/^!game\s+set\s+(.+)$/i);
+		if (mGameSet && guards.canObserver(evt)) {
+		  let g = (mGameSet[1] || '').trim();
 
-	  const afterLen = out.length;
-	  whyPost(evt, {
-		trimmed: afterLen < beforeLen,
-		deaddressed: !!evt.meta?.isDM || !!evt.meta?.replyToMe
-	  });
+		  // if the user used quotes, peel them; also normalize spaces & zero-widths
+		  if ((g.startsWith('"') && g.endsWith('"')) || (g.startsWith('“') && g.endsWith('”'))) {
+			g = g.slice(1, -1).trim();
+		  }
+		  g = g.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim(); // zero-width & squish
 
-	  // 4) deliver + log
-	  await delayFor(out);
-	  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
+		  if (!g) { await emit('Usage: !game set "Title"'); return; }
 
-	  await memory?.noteAssistant?.(evt, out);
-	  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(() => {});
-	};
+		  await updateConfig('moderation.config.json', d => {
+			d.spoilers = d.spoilers || {};
+			d.spoilers.active_game = g;
+		  });
+
+		  // read back to verify what landed on disk
+		  const conf = await readJSONSafe('codex/moderation.config.json', {});
+		  const current = conf?.spoilers?.active_game || g;  // fall back to g if read fails
+
+		  // escape just in case (avoid accidental markdown weirdness)
+		  const safe = String(current).replace(/\*/g, '\\*').trim();
+
+		  await emit(`Noted. Active game: ${safe}. Spoiler filters armed. ✧`, { raw: true });
+		  return;
+		}
+
 
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
@@ -270,6 +318,12 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await io.send(evt.roomId, `It’s ${pretty} (${tz}). ✧`, { hall: evt.hall });
 		return;
       }
+	  
+	  if (/^!/.test(text)) {
+		await emit('Unknown command. Try `!help`.', { noMoreHint: true });
+		return;
+	  }
+
 
       // ===== Normal pipeline =====
       if (!_safety.pass(evt)) return;
@@ -331,13 +385,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	   // slightly cooler sampling for crisp answers
 	   cfg = { ...cfg, temp: Math.min(0.45, cfg?.temp ?? 0.6) };
 	  }
-	    if (isQuestion) {
-    styleHints.push({
-      title: 'Answer-first',
-      text: 'Begin with the direct answer in the first sentence. 1–2 sentences total; if unknown, say so briefly.'
-    });
-    cfg = { ...cfg, temp: Math.min(0.45, cfg?.temp ?? 0.6) };
-  }
 
 	 // --- Answer-first post-compose enforcement (runs only on prefaced answers) ---
 	 function looksPrefacey(s = '') {
@@ -368,28 +415,29 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await emit(out, (r?.meta || {}));
 		return;
 	  }
-		  // !game set "Title"
-	  if (/^!game\s+set\s+"([^"]+)"/i.test(text) && guards.canObserver(evt)) {
-	    const g = text.match(/^!game\s+set\s+"([^"]+)"/i)[1];
-	    await updateConfig('moderation.config.json', draft => { draft.spoilers.active_game = g; });
-	    await emit(`Noted. Active game is now **${g}**. Spoiler filters armed. ✧`);
+ 
+	  if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
+	    const on = /on/i.test(text);
+	    await updateConfig('moderation.config.json', d => { d.enabled = on; });
+	    await emit(`Spoiler moderation ${on?'ON':'OFF'}.`);
 	    return;
 	  }
- 
-	if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
-	  const on = /on/i.test(text);
-	  await updateConfig('moderation.config.json', d => { d.enabled = on; });
-	  await emit(`Spoiler moderation ${on?'ON':'OFF'}.`);
-	  return;
-	}
-	if (/^!emotes\s+sync\b/i.test(text) && guards.canObserver(evt)) {
-	  const tw = await syncTwitchEmotes({ channelId: process.env.TWITCH_BROADCASTER_ID }).catch(()=>[]);
-	  const dd = evt.meta?.discordClient ? await syncDiscordEmotes(evt.meta.discordClient, process.env.DISCORD_GUILD_ID) : [];
-	  await saveJSON('soul/cache/emotes.twitch.json', tw);
-	  await saveJSON('soul/cache/emotes.discord.json', dd);
-	  await emit(`Synced ${tw.length} Twitch and ${dd.length} Discord emotes. ✧`);
-	  return;
-	}
+	  if (/^!emotes\s+sync\b/i.test(text) && guards.canObserver(evt)) {
+	    const channelId = process.env.TWITCH_BROADCASTER_ID;
+	    const guildId   = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
+
+	    const tw = await syncTwitchEmotes({ channelId }).catch(() => []);
+	    const dd = (evt.meta?.discordClient && guildId)
+		  ? await syncDiscordEmotes(evt.meta.discordClient, guildId).catch(() => [])
+		  : [];
+
+	    await saveJSON('soul/cache/emotes.twitch.json', tw);
+	    await saveJSON('soul/cache/emotes.discord.json', dd);
+
+	    await emit(`Synced ${tw.length} Twitch and ${dd.length} Discord emotes. ✧`);
+	    return;
+	  }
+
 
 	  // Option A) calculator route for simple math/date phrasing
 	  if (isCalcQuery(text)) {
@@ -413,14 +461,17 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		if (plan) {
 		  const capId = plan[1], args = plan[2] || '';
 		  const cap = CAPABILITIES.find(c => c.id === capId);
-		  if (!allowedFor(evt, cap, { guards })) { await emit('I can’t run that action here.', { noMoreHint: true }); return; }
+		  const allowPlanner = !/^!/.test(text);
+		  const capsText = allowPlanner ? summarizeCapabilities() : '';
+		  if (!allowedFor(evt, cap, { guards })) { await emit('I can’t run that action here.'); return; }
 
 		  switch (capId) {
 			case 'events.add': {
 			  const m = args.match(/"([^"]+)"\s+(\d{4}-\d{2}-\d{2})(?:\s+"([^"]+)")?/);
-			  if (!m) { await emit('Usage: !event add "Title" YYYY-MM-DD "Optional description"'); return; }
+			  if (!m) { await emit(`Usage: ${cap?.usage || 'events.add "Title" YYYY-MM-DD "Desc"'}`); return; }
 			  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '', source: 'plan' });
-			  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); return;
+			  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); 
+			  return;
 			}
 			case 'events.list': {
 			  const evs = await listEvents(); const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
