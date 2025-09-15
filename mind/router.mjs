@@ -9,6 +9,8 @@ import { summarizeRecentAffect } from '#mind/affect.mjs';
 import { startLink, completeLink } from '#mind/link.mjs';
 import { sanitizeOut } from '#mind/postfilter.mjs';
 import { guardEventAnnouncements } from '#mind/guard.events.mjs';
+import { addEvent, listEvents, syncDiscordScheduledEvents } from '#mind/events.mjs';
+
 
 
 // Safe defaults until real services are passed in from the orchestrator.
@@ -39,6 +41,15 @@ function defaultLLM()     {
   };
 }
 
+function isAddressed(evt, text='') {
+  const t = (text || '').toLowerCase().trim();
+  const nameHits = /\bcharity\b/.test(t);
+  const cmd = /^[!.]/.test(t); // commands like !ask, !kb …
+  const replyHit = !!evt.meta?.replyToMe;
+  const mentionHit = !!evt.meta?.mentionedMe;
+  return nameHits || cmd || replyHit || mentionHit || !!evt.meta?.isDM;
+}
+
 export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = {}) {
   const _safety = safety ?? defaultSafety();
   const _rag    = rag    ?? defaultRag();
@@ -62,8 +73,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		let out = (outText ?? '').trim();
 
 		// ⛳️ Event announcement guard
-		const evt = await guardEventAnnouncements(out);
-		if (!evt.ok) out = evt.text;
+		const guarded = await guardEventAnnouncements(out);
+        if (!guarded.ok) out = guarded.text;
 
 		// existing sanitizer
 		out = sanitizeOut(out, { allowedEmotes: allowed, allowPurr });
@@ -75,6 +86,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await memory?.noteAssistant?.(evt, out);
 		if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
       };
+	  // Observer: ignore unless addressed or it's a privileged command
+	  if (guards.observer && !isAddressed(evt, text)) return;
 
 	  // KB reload: "!kb reload"
 	  if (isCurator && /^!kb\s+reload\b/i.test(text)) {
@@ -107,6 +120,38 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
         if (ok) await io.send(evt.roomId, 'Noted.', { hall: evt.hall });
         return;
       }
+	  // EVENTS: add/list/sync (GM or mods)
+	  if (/^!event\s+add\b/i.test(text)) {
+	    if (!guards.canObserver(evt)) {
+		  await emit('Only moderators or the Guild Master can add events.'); return;
+	  }
+	  // format: !event add "Title" 2025-09-20 "Short description"
+	  const m = text.match(/^!event\s+add\s+"([^"]+)"\s+(\d{4}-\d{2}-\d{2})(?:\s+"([^"]+)")?/i);
+	  if (!m) { await emit('Usage: !event add "Title" YYYY-MM-DD "Optional description"'); return; }
+	  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '' });
+	  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); return;
+	}
+
+	  if (/^!events\s+list\b/i.test(text)) {
+	    const evs = await listEvents();
+	    if (!evs.length) { await emit('No events found in the Codex.'); return; }
+	    const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
+	    await emit(`Latest events:\n${lines.join('\n')}`); return;
+	  }
+
+	  if (/^!events\s+sync\b/i.test(text)) {
+	    if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can sync.'); return; }
+	    const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
+	    if (!guildId) { await emit('Missing DISCORD_GUILD_ID for sync.'); return; }
+	    try {
+		  const s = await syncDiscordScheduledEvents(guildId);
+		  await emit(`Synced Discord scheduled events. Added ${s.added} new (total on Discord: ${s.total}).`);
+	    } catch (e) {
+		  await emit(`Sync failed: ${e.message}`);
+	    }
+	    return;
+	  }
+
 	  // Account linking
 	  if (/^!link\b$/i.test(text)) {
 		const code = await startLink(evt);
@@ -131,9 +176,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await io.send(evt.roomId, `It’s ${pretty} (${tz}). ✧`, { hall: evt.hall });
 		return;
       }
-      // If observer is ON, ignore unless directly addressed or command
-      const isAddressed = /^!ask\b/i.test(text) || /(^|[\s@])charity\b/i.test(text);
-      if (guards.observer && !isAddressed) return;
 
       // ===== Normal pipeline =====
       if (!_safety.pass(evt)) return;
