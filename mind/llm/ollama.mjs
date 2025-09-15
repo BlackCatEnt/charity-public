@@ -6,6 +6,9 @@ function buildPrompt({ evt, ctx = [], persona = {}, speaker, conversation = {}, 
   const longB  = persona?.bios?.long_bio || '';
   const guild  = persona?.canon?.guild_name || 'Adventuring Guild';
   const currentGM = persona?.canon?.current_guildmaster || 'Bagotrix';
+  const rules = persona?.style_rules || {};
+  const isDM = !!conversation.isDM;
+  const isReply = !!conversation.isReply;
 
   const sys = [
     `${name} — ${tone}. Default concise; offer to expand.`,
