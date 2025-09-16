@@ -79,6 +79,7 @@ export function createGuildGuard({ cfg = modCfg?.guild_guard, llm, channelName }
   async function sassyExplain(evt, reason) {
     const prompt = `Write a one-line, playful but respectful moderation notice to @${evt.userName} for: ${reason}.
 Do not reveal filters. No sarcasm at the user. Keep under ${cfg?.notice_style?.max_chars ?? 140} chars.`;
+    if (!llm?.compose) return `Heads up @${evt.userName} — ${reason}. ✧`;
     const r = await llm.compose({
       evt: { ...evt, text: prompt },
       ctx: [],
