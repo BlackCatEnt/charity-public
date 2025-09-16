@@ -1,32 +1,19 @@
-/** @param {{ingest:(evt)=>void, send:(roomId,msg,opt?)=>Promise<void>}} core */
+/** @param {{ingest:(evt)=>Promise<void>}} core */
 // halls/twitch/adapter.mjs
 import tmi from 'tmi.js';
+
 import { getTwitchToken, refreshTwitch, scheduleTwitchAutoRefresh } from '#relics/tokens.mjs';
 import { validateTwitch } from '#relics/twitch-validate.mjs';
-import { evaluateMessage } from '#mind/moderation.mjs';
-import { moderate } from './mod.actions.mjs';
+import { createGuildGuard } from '#mind/guild_guard.mjs';
+import modConf from '#codex/moderation.config.json' assert { type: 'json' };
 
 
-
-
-function toUnified({ channel, tags, message }){
-  return {
-    hall: 'twitch',
-    roomId: channel.replace(/^#/,''),
-    userId: tags['user-id'] ?? '',
-    userName: tags['display-name'] ?? tags['username'] ?? '',
-    text: message,
-    ts: Date.now(),
-    meta: { rawTags: tags }
-  };
-}
-
-export default async function startHall(core, cfg){
+export default async function startHall(core, cfg) {
   const channel = (process.env.TWITCH_BROADCASTER || cfg?.twitch?.channel || '').toLowerCase();
-  if(!channel) throw new Error('[twitch] TWITCH_BROADCASTER or cfg.twitch.channel required');
+  if (!channel) throw new Error('[twitch] TWITCH_BROADCASTER or cfg.twitch.channel required');
 
   const botUser = (process.env.TWITCH_BOT_USERNAME || cfg?.twitch?.bot || '').toLowerCase();
-  if(!botUser) throw new Error('[twitch] TWITCH_BOT_USERNAME or cfg.twitch.bot required');
+  if (!botUser) throw new Error('[twitch] TWITCH_BOT_USERNAME or cfg.twitch.bot required');
 
   let tok = await getTwitchToken('bot');
 
@@ -43,7 +30,6 @@ export default async function startHall(core, cfg){
         throw new Error(`[twitch] Bot token missing chat scopes. Have [${scopes.join(', ')}], need chat:read, chat:edit.`);
       }
     } catch (e) {
-      // Only attempt refresh if we can and it looks like an auth failure
       const msg = e?.message || '';
       const canRefresh = !!tok.refresh_token;
       if (canRefresh && /validate\]\s*401/i.test(msg)) {
@@ -63,41 +49,81 @@ export default async function startHall(core, cfg){
     identity: { username: botUser, password: `oauth:${tok.access_token}` },
     channels: [ `#${channel}` ]
   });
+ const guard = createGuildGuard({
+   cfg: modConf?.guild_guard,
+   llm: _llm,                       // pass your llm connector
+   channelName: `#${process.env.TWITCH_CHANNEL}`
+ });
 
-  const stopRefresh = scheduleTwitchAutoRefresh('bot', 45*60*1000);
+  const stopRefresh = scheduleTwitchAutoRefresh('bot', 45 * 60 * 1000);
 
   client.on('reconnect', async () => {
     try {
-      // keep the password fresh for reconnects
       const fresh = await getTwitchToken('bot');
       client.opts.identity.password = `oauth:${fresh.access_token}`;
       console.log('[twitch] password rotated before reconnect');
-    } catch(e){ console.warn('[twitch] token rotate failed:', e.message); }
+    } catch (e) { console.warn('[twitch] token rotate failed:', e.message); }
   });
 
   client.on('message', async (channelName, tags, message, self) => {
     if (self) return;
-    try { 
+    // 1) Guard runs first (fast). If it acts, stop here.
+	try {
+	  const acted = await guard.onMessage(
+		{
+		  hall: 'twitch',
+		  roomId: channel,                             // or ch
+		  userId: tags['user-id'],
+		  userName: tags['display-name'] || tags.username,
+		  text,
+		  meta: { messageId: tags.id }
+		},
+		tags,
+		{ send: (room, msg, meta) => client.say(room, msg) } // minimal io facade
+	  );
+	  if (acted) return;
+	} catch (e) { console.warn('[guard] error', e?.message || e); }
+
+	// 2) Guard commands for mods/GM
+	if (/^!guard\b/i.test(text)) {
+	  const args = text.trim().split(/\s+/).slice(1);
+	  await guard.command(args, tags, { send: (room, msg) => client.say(room, msg) });
+	  return;
+	}
+
+	// 3) Fall through to the orchestrator (Charity)
+	await orch.ingest({ /* existing evt mapping */ });
+
+	try {
       const replyToMe = !!(
-       (tags['reply-parent-user-login'] && tags['reply-parent-user-login'].toLowerCase() === botUser.toLowerCase()) ||
-       (tags['reply-parent-user-id'] && tags['reply-parent-user-id'] === tags['user-id']) // fallback check
-    );
-    await core.ingest({
-      hall: 'twitch',
-      roomId: channelName.replace(/^#/, ''),
-      userId: tags['user-id'] ?? '',
-      userName: tags['display-name'] ?? tags['username'] ?? '',
-      text: message,
-      ts: Date.now(),
-      meta: { rawTags: tags, replyToMe }
-    });
-	   } catch (e) { console.error('[twitch] ingest error:', e?.message || e); }
- });
+        (tags['reply-parent-user-login'] && tags['reply-parent-user-login'].toLowerCase() === botUser.toLowerCase()) ||
+        (tags['reply-parent-user-id'] && tags['reply-parent-user-id'] === tags['user-id'])
+      );
+      await core.ingest({
+        hall: 'twitch',
+        roomId: channelName.replace(/^#/, ''),
+        userId: tags['user-id'] ?? '',
+        userName: tags['display-name'] ?? tags['username'] ?? '',
+        text: message,
+        ts: Date.now(),
+        meta: { rawTags: tags, replyToMe }
+      });
+    } catch (e) {
+      console.error('[twitch] ingest error:', e?.message || e);
+    }
+  });
 
   await client.connect();
 
   return {
-    async send(roomId, text){ await client.say(`#${roomId}`, text); },
-    async stop(){ stopRefresh(); try { await client.disconnect(); } catch {} }
+    async send(roomId, text, meta = {}) {
+      // keep planner traces out of chat
+      if (meta?.internal) return;
+      await client.say(`#${roomId}`, text);
+    },
+    async stop() {
+      stopRefresh();
+      try { await client.disconnect(); } catch {}
+    }
   };
- }
+}

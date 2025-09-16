@@ -15,7 +15,7 @@
     }
   },
   "spoilers": {
-    "active_game": "Super Mario RPG",
+    "active_game": "Clair Obscur: Expedition 33",
     "strict": true,
     "keywords": [
       "ending",
@@ -29,5 +29,23 @@
       "chapter",
       "act "
     ]
+  },
+  "guild_guard": {
+  "enabled": true,
+  "timeout_sec": 300,
+  "cooldown_ms": 15000,
+
+  "links": {
+    "block": true,
+    "allow_roles": ["broadcaster","mod","vip"],
+    "allow_domains": ["twitch.tv","discord.gg"]
+  },
+
+  "packs": { "slurs": true, "sexual": true },
+
+  "notice_style": {
+    "tone": "sassy, kind",
+    "max_chars": 140
   }
+ }
 }
