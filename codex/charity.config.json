@@ -411,7 +411,30 @@
   "reasoning":  { "selfConsistency": 2, "selfCheck": true },
   "games": {
 	"source": "igdb",            
-	"cache_ttl_ms": 86400000     
+	"cache_ttl_ms": 86400000,
+    "auto_detect": true,
+    "auto_detect_interval_ms": 120000,
+    "announce_changes": false
+	
+  },
+"planner": {
+    "enabled": true,
+    "cooldown_ms": 45000,
+    "max_steps": 4,
+    "auto_trigger_intents": ["action_request", "multi_step_help"]
+  },
+  "rag": {
+    "base_sections": [
+      "Tone & Persona",
+      "Answer—first",
+      "Recent conversation",
+      "Linked user history",
+      "Canonical Guild Name",
+      "Charity – Short Bio",
+      "Adventuring Guild — What it is"
+    ],
+    "optional_sections": {
+      "Capabilities": ["help", "what-can-you-do", "action_request", "multi_step_help"]
+    }
   }
-
 }

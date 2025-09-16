@@ -62,15 +62,16 @@ client.on('messageCreate', async (msg) => {
 
   await client.login(token);
 
-  return {
-    async send(roomId, text, meta={}){
-      const channel = await client.channels.fetch(roomId).catch(()=>null);
-      if(!channel || !('send' in channel)) return;
-      await channel.send(text);
-    },
-    async stop(){
-      try { await client.destroy(); } catch {}
-    }
-  };
+ // in halls/discord/adapter.mjs
+return {
+  async send(roomId, text, meta = {}) {
+    if (meta?.internal) return;                 // <- drop planner traces here
+    const channel = await client.channels.fetch(roomId).catch(()=>null);
+    if (!channel || !('send' in channel)) return;
+    await channel.send(text);
+  },
+  async stop(){ try { await client.destroy(); } catch {} }
+};
+
 }
 

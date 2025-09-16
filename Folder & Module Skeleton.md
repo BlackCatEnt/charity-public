@@ -2,6 +2,7 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
+	stylepass.mjs 				# 	
 	emotes.pick.mjs				# Light chooser
 	moderation.mjs				# Evaluator (decides if a message violates)
 	wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
@@ -74,6 +75,7 @@ A:\Charity\
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
 	emotes.mjs					# Emote awareness (Discord + Twitch)
+	gamewatch.mjs				# The watcher
   trials\                       # (Tests)
     e2e\
     unit\

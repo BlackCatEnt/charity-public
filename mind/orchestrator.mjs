@@ -1,3 +1,7 @@
+// A:\Charity\mind\orchestrator.mjs
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import persona from '#heart/base/charity.base.json' assert { type: 'json' };
 import manifest from '#codex/models.manifest.json' assert { type: 'json' };
 import { createRouter } from '#mind/router.mjs';
@@ -8,6 +12,26 @@ import { makeSafety } from '#mind/safety.mjs';
 import { makeMemory } from '#mind/memory.mjs';
 import { makeVectorMemory } from '#mind/memory.vector.mjs';
 
+const basePath = "A:/Charity/heart/base/charity.base.json";
+const overlayPath = "A:/Charity/heart/overlays/2025-09-12_tone-casual.json";
+
+function deepMerge(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) return [...a, ...b];
+  if (a && typeof a === "object" && b && typeof b === "object") {
+    const out = { ...a };
+    for (const k of Object.keys(b)) out[k] = deepMerge(a[k], b[k]);
+    return out;
+  }
+  return b ?? a;
+}
+
+export async function loadPersona() {
+  const [base, overlay] = await Promise.all([
+    fs.readFile(basePath, "utf8"),
+    fs.readFile(overlayPath, "utf8").catch(() => "{}")
+  ]);
+  return deepMerge(JSON.parse(base), JSON.parse(overlay));
+}
 
 export async function makeOrchestrator({ cfg }) {
   const halls = new Map();
