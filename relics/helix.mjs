@@ -69,6 +69,11 @@ export async function helixDeleteMessage({ msgId, broadcasterId = BID, moderator
   // DELETE /moderation/chat
   return helixFetch(`/moderation/chat?${q}`, { method: 'DELETE', kind });
 }
+export async function helixGetChannelInfo({ broadcasterId = BID, kind = 'bot' } = {}) {
+  const q = new URLSearchParams({ broadcaster_id: String(broadcasterId) });
+  const j = await helixFetch(`/channels?${q}`, { kind });
+  return j?.data?.[0] || null; // { broadcaster_id, broadcaster_login, game_id, game_name, title, ... }
+}
 
 // Timeout (ban for N seconds)
 export async function helixTimeoutUser({ userId, secs = 300, reason = '', broadcasterId = BID, moderatorId = MID, kind = 'bot' }) {

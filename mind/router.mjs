@@ -1,4 +1,3 @@
-import { delayFor } from '#mind/delays.mjs';
 import { guards } from '#mind/guards.mjs';
 import { tryRecordFeedback } from '#mind/feedback.mjs';
 import { getRag, setRag } from '#mind/rag.store.mjs';
@@ -17,6 +16,8 @@ import { ragConfidence, lowConfidencePrompt } from '#mind/confidence.mjs';
 import { isCalcQuery, calcInline } from '#relics/calc.mjs';
 import { CAPABILITIES, summarizeCapabilities, allowedFor } from '#mind/capabilities.mjs';
 import { syncTwitchEmotes, syncDiscordEmotes } from '#sentry/emotes.mjs';
+import { delayFor } from '#mind/delays.mjs';
+import { stylePass } from '#mind/stylepass.mjs';
 
 
 // -- simple JSON helpers (local) ---------------------------------------------
@@ -96,6 +97,10 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
   const _safety = safety ?? defaultSafety();
   const _rag    = rag    ?? defaultRag();
   const _llm    = llm    ?? defaultLLM();
+  // Module-local (above return) or closure-local near the top of createRouter:
+  let lastPlannedAt = 0;
+  const plannerCooldownMs = Number(process.env.PLANNER_COOLDOWN_MS || 45000);
+  const eligibleToPlan = (Date.now() - lastPlannedAt) > plannerCooldownMs;
 
   return {
     async handle(evt, io) {
@@ -108,6 +113,19 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
       const text = evt.text?.trim() || '';
+	  
+	  function classifyIntent(t) {
+		  const s = (t || '').toLowerCase();
+		  const isAction = /\b(build|fix|set ?up|install|connect|configure|make|deploy|write|generate|create)\b/.test(s);
+		  if (/\b(help|what can you do|capabilities|how do you work)\b/.test(s)) return 'help';
+		  if (isAction && /(?:\band\b|\bthen\b|->|\bsteps?\b|\bplan\b)/.test(s)) return 'multi_step_help';
+		  if (isAction) return 'action_request';
+		  if (s.length < 120 && /\b(hi|hey|lol|cool|thanks|gm|gn|pog|lmao)\b/.test(s)) return 'banter';
+		  return /\?$/.test(s) ? 'simple_ask' : 'simple_ask';
+		}
+	const intent = classifyIntent(text);
+	const eligibleToPlan = (Date.now() - lastPlannedAt) > plannerCooldownMs;
+
 	  
 	  // was below; move it up here
 		const speaker = identify(evt); // { role, name }
@@ -135,6 +153,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  const allowed   = persona?.conduct?.allowed_emotes || [];
 		  const allowPurr = persona?.conduct?.allow_purr ?? false;
 		  let out = (outText ?? '').trim();
+		  if (/^\s*PLAN[:>]/i.test(out)) return; // safety net: never post plans publicly
 		  if (!out) return;
 
          // guard still runs even in raw mode (we don't want hidden event announcements)
@@ -153,9 +172,10 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		 if (!out) return;
 		 whyPost(evt, { trimmed: out.length < beforeLen, deaddressed: conversation.isDM || conversation.isReply });
    	     }
-   // (whyPost already handled above for non-raw)
+		// final tone polish (casual, playful)
+		out = stylePass(out, persona);
 
-		  await delayFor(out);
+		  await delayFor(out); // already gives human-ish typing delay
 		  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
 		  await memory?.noteAssistant?.(evt, out);
 		  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
@@ -190,7 +210,24 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  await emit(`Noted. Active game: ${safe}. Spoiler filters armed. ✧`, { raw: true });
 		  return;
 		}
+		// !game auto on|off
+		const ga = text.match(/^!game\s+auto\s+(on|off)\b/i);
+		if (ga && guards.canObserver(evt)) {
+		  const on = /on/i.test(ga[1]);
+		  await updateConfig('charity.config.json', d => { d.games = d.games || {}; d.games.auto_detect = on; });
+		  await emit(`Auto-detect is now **${on ? 'ON' : 'OFF'}**.`, { raw: true });
+		  return;
+		}
 
+		// !game resync  — force one tick now
+		if (/^!game\s+resync\b/i.test(text) && guards.canObserver(evt)) {
+		  const info = await (await import('#relics/helix.mjs')).helixGetChannelInfo({});
+		  const name = (info?.game_name || '').trim();
+		  if (!name) { await emit('Could not read the current Twitch category.'); return; }
+		  await updateConfig('moderation.config.json', d => { d.spoilers = d.spoilers || {}; d.spoilers.active_game = name; });
+		  await emit(`Synced active game to **${name}**.`, { raw: true });
+		  return;
+		}
 
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
@@ -370,8 +407,13 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	    whyCtx(evt, { participants: participantsCtx[0].text });
 	  }
 
-	 const capsText = summarizeCapabilities();
-	 const capsCtx  = [{ title: 'Capabilities', text: capsText }];
+	  let capsText = '';
+	  let capsCtx = [];
+	  if (['help','action_request','multi_step_help'].includes(intent)) {
+	  capsText = summarizeCapabilities();
+	  capsCtx = [{ title: 'Capabilities', text: capsText }];
+	  }
+
 	 const isQuestion =
 	   /[?]\s*$/.test(text) ||
 	   /^\s*(who|what|when|where|why|how|which|do|does|did|can|could|will|would|are|is|was|were|should|shall)\b/i.test(text);
@@ -401,7 +443,12 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	   return (r?.text || text).trim();
 	 }
 
-	 const ctx = [...roleHints, ...moodHint, ...memoryCtx, ...userCtx, /* participantsCtx if you use it */ ...styleHints, ...vCtx, ...ragCtx, ...capsCtx];
+	 const ctx = [
+	   ...roleHints, ...moodHint, ...memoryCtx, ...userCtx,
+	   /* participantsCtx if any */, ...styleHints, ...vCtx, ...ragCtx,
+	   ...capsCtx
+	 ];
+
 	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 
 	  // !whoami (use the ctx, then return early)
@@ -445,62 +492,73 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
   	    if (r) { await emit(`≈ ${r}`); return; }
 	  }
 
-	  // Choose pipeline: normal vs deliberate
-	  const wantReason = (process.env.REASONING_DEFAULT === 'on')
-	    || /\b(why|compare|pros|cons|strategy|plan|steps|trade-?offs?)\b/i.test(text);
+// Choose pipeline: normal vs deliberate
+const wantReason =
+  (process.env.REASONING_DEFAULT === 'on' && intent !== 'banter')
+  || ['multi_step_help','action_request','help'].includes(intent);
 
-	  let reply;
-	  if (wantReason) {
-	    // confidence gate: if low, ask concise clarifier instead of guessing
-	    const conf = ragConfidence([...vCtx, ...ragCtx], { min: 2, thresh: 0.55 });
-	    if (!conf.ok) { await emit(lowConfidencePrompt({ question: 'what specific topic/source should I check?' })); return; }
+let reply;
 
-	    reply = await deliberate({ _llm, evt, ctx, persona, speaker, conversation, caps: capsText,
-		  cfg: { reasoning: { selfConsistency: 2, selfCheck: true }, temp: 0.6 } });
-		const plan = (reply?.text || '').match(/^PLAN:\s*([a-z0-9_.-]+)(?:\s+(.*))?/i);
-		if (plan) {
-		  const capId = plan[1], args = plan[2] || '';
-		  const cap = CAPABILITIES.find(c => c.id === capId);
-		  const allowPlanner = !/^!/.test(text);
-		  const capsText = allowPlanner ? summarizeCapabilities() : '';
-		  if (!allowedFor(evt, cap, { guards })) { await emit('I can’t run that action here.'); return; }
+if (wantReason) {
+  reply = await deliberate({
+    _llm, evt, ctx, persona, speaker, conversation, caps: capsText,
+    cfg: { reasoning: { selfConsistency: 2, selfCheck: true }, temp: 0.6 }
+  });
 
-		  switch (capId) {
-			case 'events.add': {
-			  const m = args.match(/"([^"]+)"\s+(\d{4}-\d{2}-\d{2})(?:\s+"([^"]+)")?/);
-			  if (!m) { await emit(`Usage: ${cap?.usage || 'events.add "Title" YYYY-MM-DD "Desc"'}`); return; }
-			  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '', source: 'plan' });
-			  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); 
-			  return;
-			}
-			case 'events.list': {
-			  const evs = await listEvents(); const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
-			  await emit(lines.length ? `Latest events:\n${lines.join('\n')}` : 'No events in the Codex.'); return;
-			}
-			case 'events.sync': {
-			  const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
-			  if (!guildId) { await emit('Missing DISCORD_GUILD_ID.'); return; }
-			  const s = await syncDiscordScheduledEvents(guildId);
-			  await emit(`Synced Discord events. Added ${s.added} new.`); return;
-			}
-			case 'kb.reload': {
-			  const ok = await _rag?.reload?.().catch(() => false);
-			  await emit(ok ? 'Codex reloaded.' : 'Reload attempted.'); return;
-			}
-			case 'observer.set': {
-			  const on = /\bon\b/i.test(args);
-			  if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can change Observer.'); return; }
-			  guards.observer = on; await emit(`Observer mode ${on ? 'ON' : 'OFF'}.`); return;
-			}
-			// Fallback when plan exists but didn’t match any case (unknown cap or bad args):
-			await emit(`I can run ${capId}, but I need proper args. Try: ${cap?.usage ?? 'check help'}.`);
-			return;  // << prevent emitting the raw PLAN text below
-		  }
-		}
+  const plan = (reply?.text || '').match(/^PLAN:\s*([a-z0-9_.-]+)(?:\s+(.*))?/i);
+  if (plan && eligibleToPlan) {
+    lastPlannedAt = Date.now();
+    const capId = plan[1], args = plan[2] || '';
+    const cap = CAPABILITIES.find(c => c.id === capId);
+    if (!allowedFor(evt, cap, { guards })) { await emit('I can’t run that action here.'); return; }
 
-	  } else {
-	    reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
-	  }
+    switch (capId) {
+      case 'events.add': {
+        const m = args.match(/"([^"]+)"\s+(\d{4}-\d{2}-\d{2})(?:\s+"([^"]+)")?/);
+        if (!m) { await emit(`Usage: ${cap?.usage || 'events.add "Title" YYYY-MM-DD "Desc"'}`); return; }
+        const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '', source: 'plan' });
+        await emit(`Event added: ${rec.title} on ${rec.date}. ✧`);
+        return;
+      }
+      case 'events.list': {
+        const evs = await listEvents();
+        const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
+        await emit(lines.length ? `Latest events:\n${lines.join('\n')}` : 'No events in the Codex.');
+        return;
+      }
+      case 'events.sync': {
+        const guildId = evt.meta?.guildId || process.env.DISCORD_GUILD_ID;
+        if (!guildId) { await emit('Missing DISCORD_GUILD_ID.'); return; }
+        const s = await syncDiscordScheduledEvents(guildId);
+        await emit(`Synced Discord events. Added ${s.added} new.`);
+        return;
+      }
+      case 'kb.reload': {
+        const ok = await _rag?.reload?.().catch(() => false);
+        await emit(ok ? 'Codex reloaded.' : 'Reload attempted.');
+        return;
+      }
+      case 'observer.set': {
+        const on = /\bon\b/i.test(args);
+        if (!guards.canObserver(evt)) { await emit('Only moderators or the Guild Master can change Observer.'); return; }
+        guards.observer = on;
+        await emit(`Observer mode ${on ? 'ON' : 'OFF'}.`);
+        return;
+      }
+      default: {
+        await emit(`I can run ${capId}, but I need proper args. Try: ${cap?.usage ?? 'check help'}.`);
+        return;
+      }
+    }
+  }
+
+  // If deliberate returned a PLAN but we didn't execute it (cooldown/unknown), don't leak it
+  if (reply?.text?.startsWith('PLAN:')) reply.text = '';
+} else {
+  // simple/banter path
+  reply = await _llm.compose({ evt, ctx, persona, speaker, conversation, cfg });
+}
+
 
       if (reply?.text) reply.text = await enforceAnswerFirstText(reply.text);
       await emit(reply.text, reply?.meta);
