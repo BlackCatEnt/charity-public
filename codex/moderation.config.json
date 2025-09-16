@@ -15,7 +15,7 @@
     }
   },
   "spoilers": {
-    "active_game": "Clair Obscur: Expedition 33",
+    "active_game": "Hollow Knight: Silksong",
     "strict": true,
     "keywords": [
       "ending",
@@ -31,21 +31,28 @@
     ]
   },
   "guild_guard": {
-  "enabled": true,
-  "timeout_sec": 300,
-  "cooldown_ms": 15000,
-
-  "links": {
-    "block": true,
-    "allow_roles": ["broadcaster","mod","vip"],
-    "allow_domains": ["twitch.tv","discord.gg"]
-  },
-
-  "packs": { "slurs": true, "sexual": true },
-
-  "notice_style": {
-    "tone": "sassy, kind",
-    "max_chars": 140
+    "enabled": true,
+    "timeout_sec": 300,
+    "cooldown_ms": 15000,
+    "links": {
+      "block": true,
+      "allow_roles": [
+        "broadcaster",
+        "mod",
+        "vip"
+      ],
+      "allow_domains": [
+        "twitch.tv",
+        "discord.gg"
+      ]
+    },
+    "packs": {
+      "slurs": false,
+      "sexual": false
+    },
+    "notice_style": {
+      "tone": "sassy, kind",
+      "max_chars": 140
+    }
   }
- }
 }

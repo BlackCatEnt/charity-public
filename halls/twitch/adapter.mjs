@@ -49,11 +49,13 @@ export default async function startHall(core, cfg) {
     identity: { username: botUser, password: `oauth:${tok.access_token}` },
     channels: [ `#${channel}` ]
   });
- const guard = createGuildGuard({
-   cfg: modConf?.guild_guard,
-   llm: _llm,                       // pass your llm connector
-   channelName: `#${process.env.TWITCH_CHANNEL}`
- });
+
+  // Pass the LLM from the orchestrator if exposed; guard will fall back if absent
+  const guard = createGuildGuard({
+    cfg: modConf?.guild_guard,
+    llm: core?.llm,
+    channelName: `#${channel}`
+  });
 
   const stopRefresh = scheduleTwitchAutoRefresh('bot', 45 * 60 * 1000);
 
@@ -69,30 +71,29 @@ export default async function startHall(core, cfg) {
     if (self) return;
     // 1) Guard runs first (fast). If it acts, stop here.
 	try {
-	  const acted = await guard.onMessage(
-		{
-		  hall: 'twitch',
-		  roomId: channel,                             // or ch
-		  userId: tags['user-id'],
-		  userName: tags['display-name'] || tags.username,
-		  text,
-		  meta: { messageId: tags.id }
-		},
-		tags,
-		{ send: (room, msg, meta) => client.say(room, msg) } // minimal io facade
-	  );
+	       const acted = await guard.onMessage(
+        {
+          hall: 'twitch',
+          roomId: channelName.replace(/^#/, ''), // e.g., 'bagotrix'
+          userId: tags['user-id'],
+          userName: tags['display-name'] || tags.username,
+          text: message,
+          meta: { messageId: tags.id }
+        },
+        tags,
+        { send: (room, msg) => client.say(`#${room}`, msg) } // minimal io facade
+      );
 	  if (acted) return;
 	} catch (e) { console.warn('[guard] error', e?.message || e); }
 
 	// 2) Guard commands for mods/GM
-	if (/^!guard\b/i.test(text)) {
-	  const args = text.trim().split(/\s+/).slice(1);
-	  await guard.command(args, tags, { send: (room, msg) => client.say(room, msg) });
+    if (/^!guard\b/i.test(message)) {
+      const args = message.trim().split(/\s+/).slice(1);
+      await guard.command(args, tags, { send: (room, msg) => client.say(`#${room}`, msg) });
 	  return;
 	}
 
 	// 3) Fall through to the orchestrator (Charity)
-	await orch.ingest({ /* existing evt mapping */ });
 
 	try {
       const replyToMe = !!(
