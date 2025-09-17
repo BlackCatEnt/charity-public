@@ -436,5 +436,22 @@
     "optional_sections": {
       "Capabilities": ["help", "what-can-you-do", "action_request", "multi_step_help"]
     }
-  }
+  },
+  "chat": {
+  "min_delay_ms": 250,
+  "max_delay_ms": 1200,
+  "quip_ratio": 0.35,
+  "anti_repeat_window_s": 120,
+  "max_msgs_per_min": 8,
+  "timing": { "mode": "auto", "boost_ms": 0, "kind": "banter" }
+},
+"embeddings": {
+  "provider": "ollama",
+  "model": "nomic-embed-text",
+  "index_dir": "soul/kb/index/nomic-v1",
+  "normalize": true,
+  "k": 6,
+  "cache_dir": "soul/cache/emb"
+}
+
 }
