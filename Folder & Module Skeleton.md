@@ -2,6 +2,7 @@ A:\Charity\
   boot\
     index.mjs                  # tiny boot: load codex, spin up mind, register halls
   mind\                         # (Core/orchestrator)
+	\replies\quipper.mjs		# Overlay for humorous quips
 	stylepass.mjs 				# 	
 	emotes.pick.mjs				# Light chooser
 	moderation.mjs				# Evaluator (decides if a message violates)
@@ -27,6 +28,7 @@ A:\Charity\
 	postfilter.mjs				# Postfilter to sanitize outbound text
 	events.mjs					# Events via chat + Discord Events sync
 	guard.events.mjs			# Blocks confident "we're hosting X" style claims unless an event exists in KB.
+	timing.mjs					# Wrap existing delays so the chat layer has one simple entry point.
   heart\                        # (Personality)
     base\charity.base.json
     overlays\README.md
@@ -72,6 +74,8 @@ A:\Charity\
 	embeddings.mjs				# Embedding client (BGE-M3 service)
 	sqlite.mjs					# SQLite helper (auto-creates schema)
 	helix-get-users.mjs			# Twitch user IDs for moderators (and a handy CLI)
+	embeddings.ollama.mjs		# Ollama embedder
+	reindex-kb.mjs				# Reindex script
   sentry\                       # (Ops/observability hooks)
     metrics-exporter.mjs
 	emotes.mjs					# Emote awareness (Discord + Twitch)

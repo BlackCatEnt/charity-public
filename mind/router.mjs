@@ -18,6 +18,7 @@ import { CAPABILITIES, summarizeCapabilities, allowedFor } from '#mind/capabilit
 import { syncTwitchEmotes, syncDiscordEmotes } from '#sentry/emotes.mjs';
 import { delayFor } from '#mind/delays.mjs';
 import { stylePass } from '#mind/stylepass.mjs';
+import { chatDelay } from '#mind/timing.mjs';
 
 
 // -- simple JSON helpers (local) ---------------------------------------------
@@ -174,8 +175,9 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
    	     }
 		// final tone polish (casual, playful)
 		out = stylePass(out, persona);
-
-		  await delayFor(out); // already gives human-ish typing delay
+		  const persona = ctx?.persona ?? {};                    // however you keep persona
+		  const styled = stylePass(rawText, persona);            // soften tone / emoji, etc.
+		  await chatDelay(styled, cfg, 'banter');                // human-like timing
 		  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
 		  await memory?.noteAssistant?.(evt, out);
 		  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
