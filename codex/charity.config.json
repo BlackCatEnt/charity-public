@@ -444,14 +444,25 @@
   "anti_repeat_window_s": 120,
   "max_msgs_per_min": 8,
   "timing": { "mode": "auto", "boost_ms": 0, "kind": "banter" }
-},
-"embeddings": {
-  "provider": "ollama",
-  "model": "nomic-embed-text",
-  "index_dir": "soul/kb/index/nomic-v1",
-  "normalize": true,
-  "k": 6,
-  "cache_dir": "soul/cache/emb"
-}
+  },
+  "embeddings": {
+    "provider": "ollama",
+    "model": "nomic-embed-text",
+    "index_dir": "soul/kb/index/nomic-v1",
+    "normalize": true,
+    "k": 6,
+    "cache_dir": "soul/cache/emb"
+  },
+  "services": {
+    "audio": {
+      "port": 8130,
+      "default_tags": {
+        "origin": "stream",
+        "game": "Unknown",
+        "scene": "Unknown",
+        "speaker": "Felix"
+      }
+    }
+  }
 
 }

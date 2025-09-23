@@ -48,14 +48,18 @@ A:\Charity\
 	feedback\2025-09\           # realtime thumbs/tags as JSONL
     feedback\writer.mjs			# 
 	snapshots\weekly\
-    cli\charity-cli.mjs         # dataset:snapshot|load|rollback|health
-    cli\feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
-	cli\memory-backfill.mjs		# Backfill CLI (index past episodic logs)
+    cli\
+		charity-cli.mjs         # dataset:snapshot|load|rollback|health
+		feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
+		memory-backfill.mjs		# Backfill CLI (index past episodic logs)
   halls\                        # (Platform adapters)
-    twitch\adapter.mjs
-	twitch\mod.actions.mjs		# Act on violations (delete/timeout + sassy explain)
-    discord\adapter.mjs
-    shared\normalizers.mjs      # platform→unified event
+    twitch\
+		adapter.mjs
+		mod.actions.mjs		# Act on violations (delete/timeout + sassy explain)
+    discord\
+		adapter.mjs
+    shared\
+		normalizers.mjs      # platform→unified event
   codex\                        # (Config & docs)
     moderation.config.json		# Config (what’s allowed + actions)
 	models.manifest.json    	# small, versioned pointers to A:\models\
@@ -63,6 +67,9 @@ A:\Charity\
 	actors.json					# a tiny identity map and pass it into the LLM so she knows who’s speaking.
     README.md                   # map of metaphor → tech
   relics\                       # (Tools & scripts)
+	\vad_streamer				#
+	  vad_streamer.py			# utterance VAD streamer
+	  VoLAN Start				# python file to start audio broadcast for streaming pc
     calc.mjs					# Tiny math/date tool route
 	path-checker.mjs        	# verifies manifest + filesystem
     publish.mjs
@@ -83,6 +90,9 @@ A:\Charity\
   trials\                       # (Tests)
     e2e\
     unit\
+  temp\
+	asr_chunks\
+	vision_frames\
   adapters\
 	twitch.mjs					#twitch adapter shim
 	discord.mjs					#discord adapter shim

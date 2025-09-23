@@ -125,8 +125,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		  return /\?$/.test(s) ? 'simple_ask' : 'simple_ask';
 		}
 	const intent = classifyIntent(text);
-	const eligibleToPlan = (Date.now() - lastPlannedAt) > plannerCooldownMs;
-
 	  
 	  // was below; move it up here
 		const speaker = identify(evt); // { role, name }
@@ -175,12 +173,28 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
    	     }
 		// final tone polish (casual, playful)
 		out = stylePass(out, persona);
-		  const persona = ctx?.persona ?? {};                    // however you keep persona
-		  const styled = stylePass(rawText, persona);            // soften tone / emoji, etc.
-		  await chatDelay(styled, cfg, 'banter');                // human-like timing
-		  await io.send(evt.roomId, out, { hall: evt.hall, ...meta });
-		  await memory?.noteAssistant?.(evt, out);
-		  if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
+		await chatDelay(out, cfg, 'banter');                   // human-like timing
+		// inside createRouter(...), in the emit(outText, meta) function
+		const cfgChannel =
+		  process.env.TWITCH_CHANNEL ||
+		  cfg?.services?.twitch?.channel ||
+		  'bagotrix'; // fallback
+
+		// If the event came from the Audio Hall, route the reply to Twitch instead
+		const targetHall = meta?.hall || (evt.hall === 'audio' ? 'twitch' : evt.hall);
+
+		// If we’re sending to Twitch due to audio-origin, make sure roomId is the real channel
+		const targetRoom =
+		  (evt.hall === 'audio' && targetHall === 'twitch')
+			? cfgChannel
+			: (meta?.roomId || evt.roomId);
+
+		// ...after you build the final `out` string:
+		await io.send(targetRoom, out, { ...meta, hall: targetHall });
+
+
+		await memory?.noteAssistant?.(evt, out);
+		if (vmem?.indexTurn) vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{});
 		};
 	  
 	  // near the top of handle(), right after you compute `text`
@@ -297,13 +311,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  if (!m) { await emit('Usage: !event add "Title" YYYY-MM-DD "Optional description"'); return; }
 	  const rec = await addEvent({ title: m[1], date: m[2], desc: m[3] || '' });
 	  await emit(`Event added: ${rec.title} on ${rec.date}. ✧`); return;
-	  }
-
-	  if (/^!events\s+list\b/i.test(text)) {
-	    const evs = await listEvents();
-	    if (!evs.length) { await emit('No events found in the Codex.'); return; }
-	    const lines = evs.slice(-5).map(e => `• ${e.date} — ${e.title}`);
-	    await emit(`Latest events:\n${lines.join('\n')}`); return;
 	  }
 
 	  if (/^!events\s+sync\b/i.test(text)) {
