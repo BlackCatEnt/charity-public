@@ -1,0 +1,58 @@
+{
+  "enabled": true,
+  "actions": {
+    "spoiler": {
+      "delete": true,
+      "timeoutSecs": 300
+    },
+    "slur": {
+      "delete": true,
+      "timeoutSecs": 600
+    },
+    "spam": {
+      "delete": true,
+      "timeoutSecs": 120
+    }
+  },
+  "spoilers": {
+    "active_game": "Hollow Knight: Silksong",
+    "strict": true,
+    "keywords": [
+      "ending",
+      "final boss",
+      "true ending",
+      "plot twist",
+      "betrays",
+      "dies",
+      "secret ending",
+      "post-credits",
+      "chapter",
+      "act "
+    ]
+  },
+  "guild_guard": {
+    "enabled": true,
+    "timeout_sec": 300,
+    "cooldown_ms": 15000,
+    "links": {
+      "block": true,
+      "allow_roles": [
+        "broadcaster",
+        "mod",
+        "vip"
+      ],
+      "allow_domains": [
+        "twitch.tv",
+        "discord.gg"
+      ]
+    },
+    "packs": {
+      "slurs": false,
+      "sexual": false
+    },
+    "notice_style": {
+      "tone": "sassy, kind",
+      "max_chars": 140
+    }
+  }
+}

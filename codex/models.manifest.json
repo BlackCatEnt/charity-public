@@ -1,0 +1,17 @@
+{
+  "models_home": "A:/models",
+  "llm": {
+    "engine": "ollama",
+    "model": "llama3.1:8b-instruct-q8_0",
+    "host": "${OLLAMA_HOST:-http://127.0.0.1:11434}"
+  },
+  "embeddings": {
+    "engine": "service",
+    "provider": "bge-m3",
+    "host": "${EMBED_HOST:-http://127.0.0.1:8089}",
+    "dim": 1024
+  },
+  "asr": {
+    "engine": "none"
+  }
+}
