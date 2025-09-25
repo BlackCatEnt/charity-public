@@ -1,5 +1,5 @@
 // ESM file (your repo already runs ESM). Node 18+ recommended.
-import "../modular_phase2/env-bootstrap.js";
+import "../boot/env-bootstrap.mjs";
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -100,3 +100,4 @@ client.on("messageCreate", async (msg) => {
 });
 
 client.login(TOKEN);
+
