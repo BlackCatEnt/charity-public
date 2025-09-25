@@ -13,6 +13,7 @@
     "#relics/*": "./relics/*",
     "#sentry/*": "./sentry/*",
     "#core/*": "./mind/*",
+    "#boot/*": "./boot/*",
     "#adapters/*": "./halls/*"
   },
   "scripts": {
