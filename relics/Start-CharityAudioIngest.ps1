@@ -60,65 +60,42 @@ Start-Process -NoNewWindow $ndiExe -ArgumentList @(
 ) | Out-Null
 Start-Sleep -Seconds 1
 
-# --- Python resolver (robust) ---
+# --- Python resolver (we added this previously)
 $VenvPy = "A:\Charity\relics\vad_streamer\.venv311\Scripts\python.exe"
-$PyExe = $null
-$PyArgsPrefix = @()   # e.g., '-3.11' when using the py launcher
+$PyExe = if (Test-Path $VenvPy) { $VenvPy } elseif (Get-Command python -ErrorAction SilentlyContinue) { (Get-Command python).Source } else { "py" }
+$PyArgsPrefix = @()
+if ($PyExe -eq "py") { $PyArgsPrefix = @("-3.11") }
+Write-Host "[ingest] using python -> $PyExe"
 
-if (Test-Path $VenvPy) {
-  $PyExe = $VenvPy
-} elseif (Get-Command python -ErrorAction SilentlyContinue) {
-  $PyExe = (Get-Command python).Source
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-  $PyExe = "py"
-  $PyArgsPrefix = @("-3.11")
-} else {
-  throw "No Python interpreter found. Install Python 3.11 or ensure your venv exists at $VenvPy"
+function Invoke-Python { param([string[]]$Args)
+  if ($PyArgsPrefix.Count) { & $PyExe @PyArgsPrefix @Args } else { & $PyExe @Args }
+  if ($LASTEXITCODE -ne 0) { throw "Python exited with $LASTEXITCODE" }
 }
 
-# sanity log
-Write-Host "[ingest] using python -> $PyExe $($PyArgsPrefix -join ' ')"
+# --- Build VAD args (NO legacy --device/--tag flags)
+$Streamer = "A:\Charity\relics\vad_streamer\vad_streamer.py"
+$ASR = "http://127.0.0.1:8123/transcribe"
+$HALL = "http://127.0.0.1:8130/asr"
+$InputDevice = "CABLE Output (VB-Audio Virtual Cable)"  # or your mic device name
 
-function Invoke-Python {
-  param([string[]]$Args)
-  if ($PyArgsPrefix.Count -gt 0) {
-    & $PyExe @PyArgsPrefix @Args
-  } else {
-    & $PyExe @Args
-  }
-  if ($LASTEXITCODE -ne 0) {
-    throw "Python exited with code $LASTEXITCODE"
-  }
-}
-
-# --- VAD streamer (read from the VB-Cable monitor) ---
-# --- config you already have/expect ---
-$ASR     = "http://127.0.0.1:8123/transcribe"
-$HALL    = "http://127.0.0.1:8130/asr"
-
-# these should be set earlier in your script or passed in:
-# $InputDevice  = "CABLE Output (VB-Audio Virtual Cable)"
-# $Speaker, $Game, $Scene
-
-# Build the arg list so PowerShell doesn't parse --flags
 $argsVAD = @(
   $Streamer,
-  "--input",     $InputDevice,
-  "--sr",        "16000",
-  "--frame_ms",  "20",
-  "--vad",       "2",
-  "--start_ms",  "240",
-  "--end_ms",    "650",
-  "--max_ms",    "12000",
-  "--asr",       $ASR,
-  "--hall",      $HALL,
-  "--speaker",   $Speaker,
-  "--game",      $Game,
-  "--scene",     $Scene,
-  "--origin",    "stream"
+  "--input",    $InputDevice,
+  "--sr",       "16000",
+  "--frame_ms", "20",
+  "--vad",      "2",
+  "--start_ms", "240",
+  "--end_ms",   "650",
+  "--max_ms",   "12000",
+  "--asr",      $ASR,
+  "--hall",     $HALL,
+  "--speaker",  $Speaker,
+  "--game",     $Game,
+  "--scene",    $Scene,
+  "--origin",   "stream"
 )
 
-# Launch in the foreground (or use Start-Process if you want it detached)
+# Launch the VAD
 Invoke-Python -Args $argsVAD
 
 
