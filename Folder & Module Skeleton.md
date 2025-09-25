@@ -1,100 +1,156 @@
+﻿# Folder & Module Skeleton
+
+_(Auto-generated; depth = 3)_
+
 A:\Charity\
-  boot\
-    index.mjs                  # tiny boot: load codex, spin up mind, register halls
-  mind\                         # (Core/orchestrator)
-	\replies\quipper.mjs		# Overlay for humorous quips
-	stylepass.mjs 				# 	
-	emotes.pick.mjs				# Light chooser
-	moderation.mjs				# Evaluator (decides if a message violates)
-	wizards/event_add.mjs		# Users can type normal sentences; the wizard asks for what’s missing, validates, and saves to the KB.
-    capabilities.mjs			# Capabilities manifest (what exists, who can use it)
-	reasoner.mjs				# (plan/check + self-consistency)
-	confidence.mjs				# Confidence gate (evidence-first)
-	llm\ollama.mjs		        
-	orchestrator.mjs
-    bus.mjs
-    router.mjs                  # unified message pipeline
-    safety.mjs
-    delays.mjs                  # human-like timing
-    telemetry.mjs
-    guards.mjs
-    feedback.mjs
-	rag.keyword.mjs
-	rag.store.mjs
-	time.mjs					# Time awareness
-	memory.vector.mjs			# Vector memory module
-	affect.mjs					# Lightweight emotional memory (valence/arousal) + tone hint
-	link.mjs					# Cross-platform account linking (Twitch↔Discord)
-	postfilter.mjs				# Postfilter to sanitize outbound text
-	events.mjs					# Events via chat + Discord Events sync
-	guard.events.mjs			# Blocks confident "we're hosting X" style claims unless an event exists in KB.
-	timing.mjs					# Wrap existing delays so the chat layer has one simple entry point.
-  heart\                        # (Personality)
-    base\charity.base.json
-    overlays\README.md
-    overlays\2025-09-11_humor-foundation.json
-  soul\                         # (Data)
-    kb\                         # knowledge base, chunks, provenance
-	kb\index\               	# vector stores (gitignored)
-    kb\charity-northstar.jsonl  
-	kb\games.jsonl				# Local KB format
-	memory\episodes\            # episodic logs
-    cache\
-	cache\onnxrt\           	# onnx/tensorrt runtime caches (gitignored)	
-	games\igdb.mjs				# Game knowledge for spoiler checks
-	games\index.mjs				# Games: facade (switches source)
-  rituals\                      # (Training & curation)
-    modlog\writer.mjs			# Modlog (JSONL per day)
-	feedback\2025-09\           # realtime thumbs/tags as JSONL
-    feedback\writer.mjs			# 
-	snapshots\weekly\
-    cli\
-		charity-cli.mjs         # dataset:snapshot|load|rollback|health
-		feedback-snapshot.mjs	# Feedback Snapshot CLI → overlay suggestion
-		memory-backfill.mjs		# Backfill CLI (index past episodic logs)
-  halls\                        # (Platform adapters)
-    twitch\
-		adapter.mjs
-		mod.actions.mjs		# Act on violations (delete/timeout + sassy explain)
-    discord\
-		adapter.mjs
-    shared\
-		normalizers.mjs      # platform→unified event
-  codex\                        # (Config & docs)
-    moderation.config.json		# Config (what’s allowed + actions)
-	models.manifest.json    	# small, versioned pointers to A:\models\
-    charity.config.json         # single source of truth
-	actors.json					# a tiny identity map and pass it into the LLM so she knows who’s speaking.
-    README.md                   # map of metaphor → tech
-  relics\                       # (Tools & scripts)
-	\vad_streamer				#
-	  vad_streamer.py			# utterance VAD streamer
-	  VoLAN Start				# python file to start audio broadcast for streaming pc
-    calc.mjs					# Tiny math/date tool route
-	path-checker.mjs        	# verifies manifest + filesystem
-    publish.mjs
-	tokens.mjs
-	helix.mjs					# twitch helix client
-	helix-smoke.mjs				# helix Smoke Test	
-	publish.ps1					# Simple PowerShell publisher (Windows-friendly)
-	twitch-validate.mjs			# tiny validator (tells you whose token it is + scopes)
-	embeddings.mjs				# Embedding client (BGE-M3 service)
-	sqlite.mjs					# SQLite helper (auto-creates schema)
-	helix-get-users.mjs			# Twitch user IDs for moderators (and a handy CLI)
-	embeddings.ollama.mjs		# Ollama embedder
-	reindex-kb.mjs				# Reindex script
-  sentry\                       # (Ops/observability hooks)
-    metrics-exporter.mjs
-	emotes.mjs					# Emote awareness (Discord + Twitch)
-	gamewatch.mjs				# The watcher
-  trials\                       # (Tests)
-    e2e\
-    unit\
-  temp\
-	asr_chunks\
-	vision_frames\
-  adapters\
-	twitch.mjs					#twitch adapter shim
-	discord.mjs					#discord adapter shim
-  core\
-	router.mjs					#mind router shim
+adapters\
+  discord.mjs
+  twitch.mjs
+  asr.service\
+    .venv\
+    __pycache__\
+Archive\
+boot\
+  index.mjs
+codex\
+  actors.json
+  charity.config.json
+  models.manifest.json
+  moderation.config.json
+  README.md
+  guard\
+    packs\
+core\
+  router.mjs
+halls\
+  audio\
+    adapter.mjs
+  discord\
+    adapter.mjs
+  shared\
+    normalizers.mjs
+  twitch\
+    adapter.mjs
+    mod.actions.mjs
+heart\
+  base\
+    charity.base.json
+  overlays\
+    2025-09-11_humor-foundation.json
+    2025-09-12_auto-overlay.json
+    2025-09-12_tone-casual.json
+    README.md
+hive\
+  herald\
+    index.mjs
+  scribe\
+    index.mjs
+logs\
+mind\
+  affect.mjs
+  bus.mjs
+  capabilities.mjs
+  confidence.mjs
+  delays.mjs
+  emotes.pick.mjs
+  events.mjs
+  feedback.mjs
+  guard.events.mjs
+  guards.mjs
+  guild_guard.mjs
+  identity.mjs
+  link.mjs
+  memory.mjs
+  memory.vector.mjs
+  moderation.mjs
+  orchestrator.mjs
+  postfilter.mjs
+  rag.keyword.mjs
+  rag.store.mjs
+  reasoner.mjs
+  router.mjs
+  safety.mjs
+  stylepass.mjs
+  telemetry.mjs
+  time.mjs
+  timing.mjs
+  why.mjs
+  llm\
+    ollama.mjs
+  replies\
+    quipper.mjs
+  wizards\
+    event_add.mjs
+node_modules\
+relics\
+  asr-chunk-uploader.mjs
+  audio-hall-launch.mjs
+  audio-listener.mjs
+  audit_imports.mjs
+  calc.mjs
+  embeddings.mjs
+  embeddings.ollama.mjs
+  generate-skeleton.ps1
+  helix.mjs
+  helix-get-users.mjs
+  helix-smoke.mjs
+  path-checker.mjs
+  paths.mjs
+  publish.mjs
+  publish.ps1
+  publish-public.ps1
+  reindex-kb.mjs
+  repo-health.ps1
+  smoke-herald-scribe.mjs
+  sqlite.mjs
+  Start-CharityAudioIngest.ps1
+  telemetry.mjs
+  tokens.mjs
+  tokens-repair.mjs
+  twitch-validate.mjs
+  .queue\
+  .runtime\
+  .vadvenv\
+    Include\
+    Lib\
+    Scripts\
+  vad_streamer\
+    .venv311\
+    .venv311.bak\
+rituals\
+  cli\
+    charity-cli.mjs
+    feedback-snapshot.mjs
+    memory-backfill.mjs
+  feedback\
+    writer.mjs
+    2025-09\
+  modlog\
+    2025-09-16.jsonl
+    writer.mjs
+  snapshots\
+    weekly\
+sentry\
+  emotes.mjs
+  gamewatch.mjs
+  metrics-exporter.mjs
+soul\
+  cache\
+  games\
+    igdb.mjs
+    index.mjs
+  kb\
+    charity-bio.jsonl
+    charity-northstar.jsonl
+    events.jsonl
+    games.jsonl
+    index\
+  memory\
+    episodes\
+    links\
+temp\
+  asr_chunks\
+  vision_frames\
+trials\
+  e2e\
+  unit\
