@@ -101,3 +101,10 @@ relics/vad_streamer/.venv311.bak/
 *.log
 *.db
 *.sqlite
+.venv*/
+venv*/
+**/.venv*/
+**/venv*/
+relics/.vadvenv/
+relics/vad_streamer/.venv311/
+relics/vad_streamer/.venv311.bak/
