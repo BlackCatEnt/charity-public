@@ -87,3 +87,17 @@ soul/kb/index/**
 
 # node
 node_modules/
+
+# Python envs (anywhere)
+.venv*/
+venv*/
+**/.venv*/
+**/venv*/
+
+# Specific mishap
+relics/vad_streamer/.venv311.bak/
+
+# Common noise (already partly ignored by your copy script)
+*.log
+*.db
+*.sqlite
