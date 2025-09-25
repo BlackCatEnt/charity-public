@@ -14,7 +14,12 @@
     "#sentry/*": "./sentry/*",
     "#core/*": "./mind/*",
     "#boot/*": "./boot/*",
-    "#adapters/*": "./halls/*"
+    "#adapters/*": "./halls/*",
+    "#hive/*": "./hive/*",
+    "#relics/* #hive/*": [
+      "./relics/*",
+      "./hive/*"
+    ]
   },
   "scripts": {
     "start": "node boot/index.mjs",
