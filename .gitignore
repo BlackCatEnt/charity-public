@@ -101,3 +101,5 @@ relics/vad_streamer/.venv311.bak/
 *.log
 *.db
 *.sqlite
+relics/.queue/
+relics/.runtime/
