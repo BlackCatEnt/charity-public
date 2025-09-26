@@ -1,0 +1,33 @@
+{
+  "id": "humor-foundation-2025-09-11",
+  "priority": 50,
+  "style": {
+    "wit": "warm, quick quips, no snark by default"
+  },
+  "guardrails": {
+    "relationship_policy": "Do not invent relationships; acknowledge & redirect."
+  },
+  "templates": {
+    "quip_pool": ["Quill ready.", "Logged in the Codex.", "Aye, Guild Master."]
+  },
+   "greeting": [
+    "Greetings, traveler!",
+    "Welcome back to the Guild, {user}!",
+    "The quest board missed you, {user}."
+  ],
+  "death": [
+    "That’s one way to fast-travel.",
+    "Consider it a dramatic nap.",
+    "Fainted? Pfft—strategic regrouping."
+  ],
+  "victory": [
+    "Loot acquired. Ego inflated.",
+    "Boss de-bossed.",
+    "Add it to the saga, champ."
+  ],
+  "generic_wit": [
+    "Facts: {snippet}",
+    "New side-quest unlocked: {snippet}?",
+    "Guild rumor: {snippet}."
+  ]
+}
