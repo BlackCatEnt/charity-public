@@ -1,0 +1,162 @@
+﻿# Folder & Module Skeleton
+
+_(Auto-generated; depth = 3)_
+
+A:\Charity\
+adapters\
+  discord.mjs
+  twitch.mjs
+  asr.service\
+    .venv\
+    __pycache__\
+Archive\
+boot\
+  index.mjs
+codex\
+  actors.json
+  charity.config.json
+  models.manifest.json
+  moderation.config.json
+  README.md
+  guard\
+    packs\
+core\
+  router.mjs
+docs\
+  ARCHITECTURE.md
+halls\
+  audio\
+    adapter.mjs
+  discord\
+    adapter.mjs
+  shared\
+    normalizers.mjs
+  twitch\
+    adapter.mjs
+    mod.actions.mjs
+heart\
+  base\
+    charity.base.json
+  overlays\
+    2025-09-11_humor-foundation.json
+    2025-09-12_auto-overlay.json
+    2025-09-12_tone-casual.json
+    README.md
+hive\
+  herald\
+    index.mjs
+  keeper\
+    index.mjs
+  scribe\
+    index.mjs
+logs\
+mind\
+  affect.mjs
+  bus.mjs
+  capabilities.mjs
+  confidence.mjs
+  delays.mjs
+  emotes.pick.mjs
+  events.mjs
+  feedback.mjs
+  guard.events.mjs
+  guards.mjs
+  guild_guard.mjs
+  identity.mjs
+  link.mjs
+  memory.mjs
+  memory.vector.mjs
+  moderation.mjs
+  orchestrator.mjs
+  postfilter.mjs
+  rag.keyword.mjs
+  rag.store.mjs
+  reasoner.mjs
+  router.mjs
+  safety.mjs
+  stylepass.mjs
+  telemetry.mjs
+  time.mjs
+  timing.mjs
+  why.mjs
+  llm\
+    ollama.mjs
+  replies\
+    quipper.mjs
+  wizards\
+    event_add.mjs
+node_modules\
+relics\
+  asr-chunk-uploader.mjs
+  audio-hall-launch.mjs
+  audio-listener.mjs
+  audit_imports.mjs
+  calc.mjs
+  embeddings.mjs
+  embeddings.ollama.mjs
+  generate-skeleton.ps1
+  helix.mjs
+  helix-get-users.mjs
+  helix-smoke.mjs
+  path-checker.mjs
+  paths.mjs
+  publish.mjs
+  publish.ps1
+  publish-public.ps1
+  reindex-kb.mjs
+  repo-health.ps1
+  run-keeper.mjs
+  smoke-herald-scribe.mjs
+  smoke-keeper.mjs
+  sqlite.mjs
+  Start-CharityAudioIngest.ps1
+  telemetry.mjs
+  tokens.mjs
+  tokens-repair.mjs
+  twitch-validate.mjs
+  .queue\
+  .runtime\
+  .vadvenv\
+    Include\
+    Lib\
+    Scripts\
+  vad_streamer\
+    .venv311\
+    .venv311.bak\
+rituals\
+  cli\
+    charity-cli.mjs
+    feedback-snapshot.mjs
+    memory-backfill.mjs
+  feedback\
+    writer.mjs
+    2025-09\
+  modlog\
+    2025-09-16.jsonl
+    writer.mjs
+  snapshots\
+    weekly\
+sentry\
+  emotes.mjs
+  gamewatch.mjs
+  metrics-exporter.mjs
+soul\
+  cache\
+  games\
+    igdb.mjs
+    index.mjs
+  kb\
+    charity-bio.jsonl
+    charity-northstar.jsonl
+    events.jsonl
+    games.jsonl
+    index\
+  memory\
+    episodes\
+    links\
+temp\
+  asr_chunks\
+  vision_frames\
+trials\
+  e2e\
+  unit\

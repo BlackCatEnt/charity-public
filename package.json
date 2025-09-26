@@ -1,17 +1,34 @@
 {
-  "name": "twitch-rag-bot",
-  "version": "0.1.0",
+  "name": "Charity-The-Adventurer",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#mind/*": "./mind/*",
+    "#heart/*": "./heart/*",
+    "#soul/*": "./soul/*",
+    "#halls/*": "./halls/*",
+    "#rituals/*": "./rituals/*",
+    "#codex/*": "./codex/*",
+    "#relics/*": "./relics/*",
+    "#sentry/*": "./sentry/*",
+    "#core/*": "./mind/*",
+    "#boot/*": "./boot/*",
+    "#adapters/*": "./halls/*",
+    "#hive/*": "./hive/*"
+  },
   "scripts": {
-    "start": "node data/index.js",
-    "index-kb": "node scripts/index_kb.js"
+    "start": "node boot/index.mjs",
+    "check": "node relics/path-checker.mjs",
+    "fb:snapshot": "node rituals/cli/feedback-snapshot.mjs --window=7d",
+    "preflight": "npm run check && node relics/helix-smoke.mjs",
+    "mem:backfill": "node rituals/cli/memory-backfill.mjs --days=30"
   },
   "dependencies": {
-    "axios": "^1.7.2",
-    "chokidar": "^3.6.0",
-    "dotenv": "^16.4.5",
-    "tmi.js": "^1.8.5",
-    "winston": "^3.13.0"
+    "better-sqlite3": "^12.2.0",
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "tmi.js": "^1.8.5"
   }
 }
