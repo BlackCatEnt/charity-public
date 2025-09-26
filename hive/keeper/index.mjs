@@ -14,6 +14,10 @@ import { setTimeout as delay } from 'node:timers/promises';
 import CONFIG from './config.mjs';
 import { createLogger } from './log.mjs';
 import Scribe from '../scribe/index.mjs';
+import { metricsIngest, startMetrics } from "#sentry/metrics/rollup.mjs";
+import { scribeWrite } from "#hive/scribe/index.mjs";
+
+startMetrics();
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -30,6 +34,14 @@ const TMP_DIR = path.join(RUNTIME_DIR, 'tmp');
 const HEARTBEAT_FILE = path.join(RUNTIME_DIR, 'keeper.alive');
 const LOCK_FILE = path.join(RUNTIME_DIR, 'keeper.lock');
 const HASH_MARKS_DIR = path.join(RUNTIME_DIR, 'keeper_hashes');
+const LOG_DIR = process.env.KEEPER_LOG_DIR ?? "relics/.runtime/logs/events";
+const LOG_FILE = process.env.KEEPER_LOG_FILE ?? "keeper.jsonl";
+const ECHO = (process.env.KEEPER_LOG_ECHO ?? "0") === "1";
+const ensureDir = (p) => fs.mkdirSync(p, { recursive: true });
+
+ensureDir(LOG_DIR);
+const logPath = path.join(LOG_DIR, LOG_FILE);
+const out = fs.createWriteStream(logPath, { flags: "a" });
 
 // Retention policy
 const RETAIN_PROCESSED_DAYS = 7;
@@ -286,5 +298,27 @@ if (isDirectRun) {
     process.exitCode = 1;
   });
 }
+export function keeperLog(event) {
+  const rec = {
+    ts: new Date().toISOString(),
+    v: 1,
+	node_id: process.env.NODE_ID || process.env.COMPUTERNAME || "",
+    service: process.env.SERVICE_NAME || "keeper",
+    version: process.env.SERVICE_VERSION || process.env.npm_package_version || "0.3.0",
+    ...event,
+  };
+  const line = JSON.stringify(rec);
+  out.write(line + "\n");
+  if (ECHO) console.log(line);
+  try { metricsIngest(rec); } catch {}
+  if ((process.env.SCRIBE_FANOUT ?? "0") === "1") {
+    // fan out asynchronously, don't block
+    Promise.resolve().then(() => scribeWrite(rec)).catch(() => {});
+  }
+}
 
+// minimal health pulse (you can invoke this from boot once per minute)
+export function keeperPulse(extra = {}) {
+  keeperLog({ type: "keeper.pulse", ...extra });
+}
 export default run;

@@ -103,3 +103,8 @@ relics/vad_streamer/.venv311.bak/
 *.sqlite
 relics/.queue/
 relics/.runtime/
+
+
+
+.venv*/
+relics/vad_streamer/.venv*/

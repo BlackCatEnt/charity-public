@@ -1,7 +1,6 @@
 // A:\Charity\mind\orchestrator.mjs
 import fs from "node:fs/promises";
 import path from "node:path";
-
 import persona from '#heart/base/charity.base.json' assert { type: 'json' };
 import manifest from '#codex/models.manifest.json' assert { type: 'json' };
 import { createRouter } from '#mind/router.mjs';
@@ -84,7 +83,12 @@ export async function makeOrchestrator({ cfg }) {
       });
     },
     async start() {
-      console.log(`[boot] halls online: ${[...halls.keys()].join(', ')}`);
+      // (optional) use merged persona
+      // const persona = await loadPersona();
+      const { keeperLog } = await import("#hive/keeper/index.mjs");
+      keeperLog({ type: "boot.online", halls: Array.from(halls.keys()) });
+      const { scribeWrite } = await import("#hive/scribe/index.mjs");
+      await scribeWrite({ type: "chat.msg", hall: "twitch", user: "bagotrix", len: 42 });
     },
     async stop() {
       for (const h of halls.values()) await h.stop();
