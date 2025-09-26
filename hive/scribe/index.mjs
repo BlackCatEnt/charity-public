@@ -1,34 +1,92 @@
-import { info } from "#relics/telemetry.mjs";
-import { EPISODES_DIR, FEEDBACK_DIR, RUNTIME_DIR } from "#relics/paths.mjs";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+// hive/scribe/index.mjs
+// v0.2 Ops Polish — Real-ish Scribe adapter with failure classification and metrics
+import { setTimeout as delay } from 'node:timers/promises';
 
-async function appendJsonl(file, obj) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.appendFile(file, JSON.stringify(obj) + "\n", "utf8");
-}
-
-export async function write(event) {
-  const ts  = new Date().toISOString();
-  const day = ts.slice(0,10);
-
-  if (event.kind === "episode") {
-    const file = path.join(EPISODES_DIR, `${day}.jsonl`);
-    await appendJsonl(file, { ts, ...event.data });
-    info("scribe.episode.write", { file, bytes: Buffer.byteLength(JSON.stringify(event.data)) });
-    return { ok: true, file };
+export class Scribe {
+  constructor({ logger, baseUrl='http://scribe.local/stub', simulate='auto' } = {}) {
+    this.log = logger;
+    this.baseUrl = baseUrl;
+    this.simulate = simulate; // 'auto'|'success'|'retry'|'terminal'
+    this.metrics = {
+      keeper_scribe_sent: 0,
+      keeper_scribe_retries: 0,
+      keeper_scribe_dropped: 0,
+    };
   }
 
-  if (event.kind === "feedback") {
-    const file = path.join(FEEDBACK_DIR, "feedback.jsonl");
-    await appendJsonl(file, { ts, ...event.data });
-    info("scribe.feedback.write", { file });
-    return { ok: true, file };
+  classifyError(e) {
+    const code = e?.code ?? e?.status ?? e?.statusCode;
+    if (code === undefined || code === null) {
+      // Network-ish / unknown: assume retryable
+      return { retryable: true, code: undefined };
+    }
+    if (code === 429) return { retryable: true, code };
+    if (code >= 500) return { retryable: true, code };
+    // Most 4xx are terminal
+    return { retryable: false, code };
   }
 
-  const file = path.join(RUNTIME_DIR, "misc.jsonl");
-  await appendJsonl(file, { ts, ...event });
-  info("scribe.misc.write", { file });
-  return { ok: true, file };
+  async send(record, { maxRetries=3, backoffMs=200 } = {}) {
+    // HTTP stub: simulate success/failure modes without doing I/O.
+    const mode = this.simulate;
+    let attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        await this.#fakeHttp(record, mode, attempt);
+        this.metrics.keeper_scribe_sent++;
+        this.log?.info?.('scribe.sent', { attempt });
+        return true;
+      } catch (e) {
+        const { retryable, code } = this.classifyError(e);
+        if (retryable && attempt <= maxRetries) {
+          this.metrics.keeper_scribe_retries++;
+          this.log?.warn?.('scribe.retry', { attempt, code, msg: e?.message });
+          await delay(backoffMs * attempt);
+          continue;
+        }
+        // terminal or out of retries
+        this.metrics.keeper_scribe_dropped++;
+        this.log?.error?.('scribe.drop', { attempt, code, msg: e?.message });
+        return false;
+      }
+    }
+  }
+
+  async #fakeHttp(_record, mode, attempt) {
+    // Modes:
+    //  - 'success': always 200
+    //  - 'retry'  : first one or two attempts -> 503, then 200
+    //  - 'terminal': 400
+    //  - 'auto'   : read flags from process.env or record.__force
+    const flags = {
+      forceRetry: process.env.SMOKE_FORCE_RETRY === '1' || _record?.__force === 'retry',
+      forceTerminal: process.env.SMOKE_FORCE_TERMINAL === '1' || _record?.__force === 'terminal',
+      forceSuccess: process.env.SMOKE_FORCE_SUCCESS === '1' || _record?.__force === 'success',
+    };
+    const effective = mode === 'auto'
+      ? (flags.forceSuccess ? 'success' : (flags.forceTerminal ? 'terminal' : (flags.forceRetry ? 'retry' : 'success')))
+      : mode;
+
+    // tiny delay to mimic IO
+    await delay(15);
+
+    if (effective === 'success') return;
+    if (effective === 'terminal') {
+      const err = new Error('Bad Request');
+      err.status = 400;
+      throw err;
+    }
+    if (effective === 'retry') {
+      if (attempt < 2) {
+        const err = new Error('Service Unavailable');
+        err.status = 503;
+        throw err;
+      }
+      return; // success on retry
+    }
+    return;
+  }
 }
 
+export default Scribe;

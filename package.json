@@ -15,11 +15,7 @@
     "#core/*": "./mind/*",
     "#boot/*": "./boot/*",
     "#adapters/*": "./halls/*",
-    "#hive/*": "./hive/*",
-    "#relics/* #hive/*": [
-      "./relics/*",
-      "./hive/*"
-    ]
+    "#hive/*": "./hive/*"
   },
   "scripts": {
     "start": "node boot/index.mjs",

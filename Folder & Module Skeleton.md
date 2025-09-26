@@ -22,6 +22,8 @@ codex\
     packs\
 core\
   router.mjs
+docs\
+  ARCHITECTURE.md
 halls\
   audio\
     adapter.mjs
@@ -42,6 +44,8 @@ heart\
     README.md
 hive\
   herald\
+    index.mjs
+  keeper\
     index.mjs
   scribe\
     index.mjs
@@ -101,7 +105,9 @@ relics\
   publish-public.ps1
   reindex-kb.mjs
   repo-health.ps1
+  run-keeper.mjs
   smoke-herald-scribe.mjs
+  smoke-keeper.mjs
   sqlite.mjs
   Start-CharityAudioIngest.ps1
   telemetry.mjs
