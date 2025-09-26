@@ -45,3 +45,47 @@
 - Task Scheduler entry points:
 	- node A:\Charity\boot\index.mjs (main)
 	- (optionally) node A:\Charity\relics\run-keeper.mjs (if running Keeper as its own task)
+	
+	# Hive Keeper (v0.1)
+
+
+**Purpose:** Drain `relics/.queue/*.jsonl` into durable memory (Scribe) with retries/isolation and zero data loss.
+
+
+**Placement:** `hive/keeper/index.mjs` (runner: `relics/run-keeper.mjs`).
+
+
+**Flow:**
+- Lock file: `relics/.runtime/keeper.lock` (single-runner).
+- Idempotency: content SHA256 ledger at `relics/.runtime/keeper_hashes/<hash>.done`; sidecar `*.sha256` in `.queue/`.
+- Atomic processing: work in `relics/.runtime/tmp` then `fs.rename` →
+- success → `relics/.runtime/queue_processed/`
+- failure → `relics/.runtime/queue_failed/`
+- Heartbeat: `relics/.runtime/keeper.alive` per tick.
+- Retention: processed 7d, failed 30d (daily sweep).
+- Metrics in logs: `metric=keeper_processed_files value=n`, etc.
+
+
+**API:**
+- `processQueueOnce({ scribeSend, maxFilesPerTick }) → Promise<number>`
+- `start({ intervalMs, scribeSend }) → () => stop()`
+
+
+**Scribe:** Keeper expects `scribeSend(record) → Promise<boolean>`. Provide via `hive/scribe/index.mjs` export `send()`.
+
+
+**Windows Task Scheduler:**
+Target `node relics/run-keeper.mjs` for ONLOGON and ONSTART.
+
+
+**CI Smoke:** Add `node relics/smoke-keeper.mjs` after repo-health.
+*/
+
+
+
+
+// File: .github/workflows/ci.yml (snippet to append)
+/*
+- name: Smoke: Hive Keeper
+run: node relics/smoke-keeper.mjs
+*/
