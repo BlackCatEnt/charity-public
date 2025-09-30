@@ -127,3 +127,5 @@ node_modules/
 
 # mirror worktree
 .public-mirror/
+
+sentry/metrics/
