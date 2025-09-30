@@ -1,10 +1,12 @@
 param(
   [string]$SourceBranch = "v0.3-next",
   [string]$DestBranch   = "v0.3-next",
-  [string]$PublicRemote = "public",
   [string]$SourceRemote = "origin",
+  [string]$PublicRemote = "public",
+  [string]$WorktreePath = ".public-mirror",
   [switch]$DryRun
 )
+
 
 $ErrorActionPreference = "Stop"
 
@@ -31,11 +33,33 @@ function Ensure-BranchUpToDate {
 }
 
 function New-PublicWorktree {
-  param([string]$Path)
-  if (Test-Path $Path) { Remove-Item -Recurse -Force $Path }
-  # Create a separate worktree bound to the same repo on the same branch
-  git worktree add --force --track $Path $PublicRemote/$Branch
+  param([string]$WorktreePath,[string]$DstRemote,[string]$DstBranch)
+
+  git worktree remove $WorktreePath --force 2>$null
+  if (Test-Path $WorktreePath) { Remove-Item -Recurse -Force $WorktreePath }
+
+  git fetch $DstRemote --prune
+
+  # Create a detached worktree (no branch conflicts with main repo)
+  git worktree add --detach $WorktreePath
+
+  pushd $WorktreePath | Out-Null
+  # If the dest branch exists on the public remote, anchor HEAD there so diffs are minimal
+  if (git rev-parse --verify --quiet "refs/remotes/$DstRemote/$DstBranch") {
+    git reset --hard "$DstRemote/$DstBranch"
+  } else {
+    # orphan start: empty tree for first publish
+    git checkout --orphan $DstBranch
+    git rm -r --cached . 2>$null
+    if (Test-Path .) {
+      Get-ChildItem -Force | Where-Object { $_.Name -ne ".git" } | Remove-Item -Recurse -Force
+    }
+    # leave HEAD on the new orphan branch; still safe because main worktree owns the same name
+    # (we're in a separate worktree, so it's allowed)
+  }
+  popd | Out-Null
 }
+
 
 function Copy-Curated {
   param([string]$Src, [string]$Dst, [switch]$ListOnly)
@@ -87,15 +111,18 @@ function Commit-And-Push {
 }
 
 # ----- main -----
-Require-Remotes
+Require-Remotes -Src $SourceRemote -Dst $PublicRemote
 Require-CleanTree
-Ensure-BranchUpToDate
+Ensure-BranchUpToDate -Src $SourceRemote -Branch $SourceBranch
 Require-Remotes -Src $SourceRemote -Dst $PublicRemote
 Ensure-BranchUpToDate -Src $SourceRemote -Branch $SourceBranch
 
+New-PublicWorktree -WorktreePath $WorktreePath -DstRemote $PublicRemote -DstBranch $DestBranch
+Sync-Contents -SrcPath "." -DstPath $WorktreePath -WhatIf:$DryRun
+Push-Public  -WorktreePath $WorktreePath -DstRemote $PublicRemote -DstBranch $DestBranch -WhatIf:$DryRun
+
 $worktree = ".public-mirror"
 Write-Host "Preparing worktree at $worktree for '$PublicRemote/$Branch'…"
-New-PublicWorktree -Path $worktree
 
 try {
   $src = (Get-Location).Path
