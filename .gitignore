@@ -110,3 +110,20 @@ relics/.runtime/
 
 .venv*/
 relics/vad_streamer/.venv*/
+# runtime + secrets
+.env
+.env.*
+relics/.runtime/
+relics/.runtime/**
+
+# local Python venvs
+relics/vad_streamer/.venv*/
+relics/vad_streamer/.venv*/**
+
+# Node / logs / misc
+node_modules/
+*.log
+*.tmp
+
+# mirror worktree
+.public-mirror/
