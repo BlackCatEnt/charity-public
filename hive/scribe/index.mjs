@@ -1,6 +1,53 @@
 // hive/scribe/index.mjs
 // v0.2 Ops Polish — Real-ish Scribe adapter with failure classification and metrics
+import fs from "node:fs";
+import path from "node:path";
+
+const URL = process.env.SCRIBE_TRANSPORT_URL ?? "file://relics/.runtime/logs/events/scribe.jsonl";
+const MIN_MS = parseInt(process.env.SCRIBE_BACKOFF_MIN_MS ?? "500", 10);   // 0.5s
+const MAX_MS = parseInt(process.env.SCRIBE_BACKOFF_MAX_MS ?? "10000", 10); // 10s
+const MAX_RETRIES = parseInt(process.env.SCRIBE_MAX_RETRIES ?? "6", 10);   // ~ up to ~10–20s worst case
+
+const isFile = URL.startsWith("file://");
+let fileStream;
+if (isFile) {
+  const p = URL.replace("file://", "");
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fileStream = fs.createWriteStream(p, { flags: "a" });
+}
+
+function jitter(ms) {
+  const spread = Math.min(ms, 250); // tighten spread for predictability
+  return ms + Math.floor(Math.random() * spread);
+}
+
 import { setTimeout as delay } from 'node:timers/promises';
+
+export async function scribeWrite(record) {
+  const line = JSON.stringify({ ts: new Date().toISOString(), v: 1, ...record }) + "\n";
+  if (isFile) {
+    fileStream.write(line);
+    return { ok: true, mode: "file" };
+  }
+  // http(s) mode
+  let attempt = 0;
+  while (attempt <= MAX_RETRIES) {
+    try {
+      const res = await fetch(URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: line,
+      });
+      if (res.ok) return { ok: true, mode: "http", status: res.status };
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      if (attempt === MAX_RETRIES) return { ok: false, error: String(err) };
+      const base = Math.min(MAX_MS, Math.max(MIN_MS, MIN_MS * Math.pow(2, attempt)));
+      await delay(jitter(base));
+      attempt++;
+    }
+  }
+}
 
 export class Scribe {
   constructor({ logger, baseUrl='http://scribe.local/stub', simulate='auto' } = {}) {
