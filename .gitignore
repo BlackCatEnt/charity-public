@@ -1,5 +1,6 @@
 # Ignore environment variables
 .env
+.env/
 *.env
 
 # Ignore token storage
@@ -115,6 +116,8 @@ relics/vad_streamer/.venv*/
 .env.*
 relics/.runtime/
 relics/.runtime/**
+relics/.runtime/logs/
+relics/.runtime/metrics/
 
 # local Python venvs
 relics/vad_streamer/.venv*/

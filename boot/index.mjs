@@ -21,5 +21,9 @@ const io = { send: (roomId, msg, opt) => orch.send(roomId, msg, opt) };
 const stopGameWatch = startTwitchGameWatch({ io });
 // keep a ref to stopGameWatch() if you want to cleanly stop it on shutdown
 
+for (const sig of ['SIGINT','SIGTERM','beforeExit']) {
+  process.on(sig, async () => { try { await flush(); } catch {} });
+}
+
 // optional: background token refresh
 keepBroadcasterFresh();
