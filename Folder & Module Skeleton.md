@@ -1,4 +1,4 @@
-﻿# Folder & Module Skeleton
+# Folder & Module Skeleton
 
 _(Auto-generated; depth = 3)_
 
@@ -7,8 +7,8 @@ adapters\
   discord.mjs
   twitch.mjs
   asr.service\
-    .venv\
     __pycache__\
+    .venv\
 Archive\
 boot\
   index.mjs
@@ -46,9 +46,14 @@ hive\
   herald\
     index.mjs
   keeper\
+    config.mjs
     index.mjs
+    log.mjs
   scribe\
+    backoff.mjs
     index.mjs
+    metrics.mjs
+    transport.mjs
 logs\
 mind\
   affect.mjs
@@ -95,24 +100,27 @@ relics\
   embeddings.mjs
   embeddings.ollama.mjs
   generate-skeleton.ps1
-  helix.mjs
+  health-keeper.ps1
   helix-get-users.mjs
   helix-smoke.mjs
+  helix.mjs
+  mirror-to-public.ps1
   path-checker.mjs
   paths.mjs
+  publish-public.ps1
   publish.mjs
   publish.ps1
-  publish-public.ps1
   reindex-kb.mjs
   repo-health.ps1
   run-keeper.mjs
   smoke-herald-scribe.mjs
   smoke-keeper.mjs
+  smoke-scribe.mjs
   sqlite.mjs
   Start-CharityAudioIngest.ps1
   telemetry.mjs
-  tokens.mjs
   tokens-repair.mjs
+  tokens.mjs
   twitch-validate.mjs
   .queue\
   .runtime\
@@ -120,6 +128,8 @@ relics\
     Include\
     Lib\
     Scripts\
+  dev\
+    scribe-dev-server.mjs
   vad_streamer\
     .venv311\
     .venv311.bak\
@@ -140,6 +150,9 @@ sentry\
   emotes.mjs
   gamewatch.mjs
   metrics-exporter.mjs
+  logs\
+  metrics\
+    rollup.mjs
 soul\
   cache\
   games\
