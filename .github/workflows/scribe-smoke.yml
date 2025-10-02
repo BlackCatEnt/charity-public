@@ -44,4 +44,4 @@ jobs:
 
       - name: Stop dev ingest server
         if: always()
-        run: kill  || true
+        run: kill 11628 || true
