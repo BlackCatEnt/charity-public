@@ -24,11 +24,12 @@ jobs:
 
       - name: Start dev ingest server
         run: |
-          node relics/dev/scribe-dev-server.mjs 8787 --fail-rate=0.15 &
+          nohup node relics/dev/scribe-dev-server.mjs 8787 --fail-rate=0.15 > server.log 2>&1 &
           echo $! > server.pid
-          for i in {1..20}; do
-            curl -sSf http://127.0.0.1:8787/ingest -X POST || true
-            sleep 0.2
+          echo "PID="
+          for i in {1..40}; do
+            curl -sS -X POST http://127.0.0.1:8787/ingest >/dev/null 2>&1 && break
+            sleep 0.25
           done
 
       - name: Run smoke against local ingest
@@ -39,9 +40,11 @@ jobs:
           SCRIBE_BACKOFF_CAP_MS: "3000"
           SCRIBE_BACKOFF_MAX_RETRIES: "5"
           SCRIBE_METRICS_AUTOFLUSH: "1"
-        run: |
-          node relics/smoke-scribe.mjs --n=20 --batch=5
+        run: node relics/smoke-scribe.mjs --n=20 --batch=5
 
       - name: Stop dev ingest server
         if: always()
-        run: kill 11628 || true
+        run: |
+          if [ -f server.pid ]; then kill "" || true; fi
+          echo "---- server.log (tail) ----"
+          if [ -f server.log ]; then tail -n 200 server.log || true; fi
