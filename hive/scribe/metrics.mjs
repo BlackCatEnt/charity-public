@@ -24,7 +24,7 @@ export function counter(name, value = 1, tags = {}) {
     counter: true,
     name,
     value,
-    tags,
+    tags: { ...defaultMetricTags, ...tags },
   };
   pending.push(JSON.stringify(ev));
 }
@@ -49,6 +49,9 @@ export async function counterAndFlush(name, value = 1, tags = {}) {
 }
 
 // helpers -----------------------------------------------------------------
+
+let defaultMetricTags = {};
+export function setDefaultMetricTags(tags) { defaultMetricTags = { ...tags }; }
 
 function resolvePath(p) {
   if (!p) return p;

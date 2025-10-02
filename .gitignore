@@ -132,3 +132,5 @@ node_modules/
 .public-mirror/
 
 sentry/metrics/
+*.yml text eol=lf
+*.yaml text eol=lf

@@ -61,6 +61,16 @@ Backoff env (defaults in parentheses):
 4. Metrics: NDJSON lines written/rotated daily under `relics/.runtime/metrics/YYYY-MM-DD.ndjson`
 5. Backoff: full-jitter exponential with cap; resets on success.
 
+### CI: Scribe smoke
+Public repo - [![Scribe smoke](https://github.com/BlackCatEnt/charity-public/actions/workflows/scribe-smoke.yml/badge.svg?branch=v0.3-next)](https://github.com/BlackCatEnt/charity-public/actions/workflows/scribe-smoke.yml)
+This workflow boots a local NDJSON ingest server and runs the Scribe smoke script against it. It verifies:
+
+- `SCRIBE_TRANSPORT_URL=http://127.0.0.1:8787/ingest` posts NDJSON successfully.
+- Full-jitter backoff tolerates transient 500s from the local server.
+- No secrets required; all tests run against localhost.
+
+
+
 ### Metrics
 - Counter rollups every minute to `relics/.runtime/logs/metrics/YYYY-MM/metrics-YYYY-MM-DD.jsonl`
 - Configure: `METRICS_ROLLUP_INTERVAL_MS`, `METRICS_DIR`.
