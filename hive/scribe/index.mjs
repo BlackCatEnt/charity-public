@@ -1,7 +1,16 @@
 // hive/scribe/index.mjs
 import { makeTransport } from "./transport.mjs";
 import { withRetry } from "./backoff.mjs";
-import { counter, flush } from "./metrics.mjs";
+import { counter, flush, setDefaultMetricTags } from "./metrics.mjs";
+import os from "node:os";
+
+const defaultTags = {
+  app: process.env.APP_NAME || "charity",
+  host: os.hostname(),
+  build: process.env.GIT_SHA || process.env.COMMIT_SHA || "dev",
+};
+
+setDefaultMetricTags(defaultTags);
 
 // Accept both "stdout" and "stdout:" to be forgiving
 function normalizeUrl(u) {
@@ -48,16 +57,17 @@ export async function sendLines(ndjsonLines) {
 
   try {
     await withRetry(() => transport.send(ndjsonLines), backoffOpts);
-    counter("scribe.sent", ndjsonLines.length, { transport: transport.name, status: "ok" });
+    counter("scribe.sent", ndjsonLines.length, { transport: transport.name, status: "ok", ...defaultTags });
   } catch (err) {
     counter("scribe.drop", ndjsonLines.length, {
       transport: transport.name,
       status: "error",
       code: err?.code || "ERR",
-    });
+      ...defaultTags,
+});
     throw err;
   } finally {
-    counter("scribe.ms", Date.now() - start, { transport: transport.name });
+    counter("scribe.ms", Date.now() - start, { transport: transport.name, ...defaultTags });
     if (AUTOFLUSH) { try { await flush(); } catch {} }
   }
 }
