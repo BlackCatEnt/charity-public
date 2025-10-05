@@ -1,0 +1,59 @@
+# Ignore environment variables
+.env
+*.env
+
+# Ignore token storage
+data/token.json
+
+#Ignore logs and temp files
+logs/
+*.log
+*.tmp
+
+#Ignore node_modules and build artifacts
+node_modules/
+dist/
+build/
+
+# Ignore OS / editor junk
+.DS_Store
+Thumbs.db
+
+# secrets
+.env
+config/charity-config.json
+data/
+logs/
+*.log
+*.sqlite
+*.db
+token*.json
+
+# node
+node_modules/
+
+# models / artifacts
+models/
+*.onnx
+*.pt
+*.bin
+*.gguf
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Python virtual envs
+.venv/
+tools/bge_m3_service/.venv/
+
+# Python caches
+**/__pycache__/
+*.pyc
+
+# Local data/state (runtime-generated)
+data/token_state.json
+data/live_state.json
+
+# Logs
+*.log
