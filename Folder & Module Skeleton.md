@@ -47,10 +47,14 @@ hive\
     index.mjs
   keeper\
     config.mjs
+    dlq.mjs
     index.mjs
+    keeper.config.json
     log.mjs
+    qos.mjs
   scribe\
     backoff.mjs
+    client.mjs
     index.mjs
     metrics.mjs
     transport.mjs

@@ -1,0 +1,35 @@
+{
+"queue": {
+"maxSize": 1000,
+"overflowPolicy": "reject",
+"ackTimeoutMs": 15000,
+"visibilityTimeoutMs": 30000
+},
+"rateLimits": {
+"default": { "tokensPerSec": 50, "bucketSize": 100 },
+"halls": {
+"twitch": { "tokensPerSec": 10, "bucketSize": 20 },
+"discord": { "tokensPerSec": 15, "bucketSize": 30 },
+"audio": { "tokensPerSec": 5, "bucketSize": 10 }
+},
+"bees": {
+"busy": { "tokensPerSec": 5, "bucketSize": 10 },
+"muse": { "tokensPerSec": 2, "bucketSize": 4 },
+"shield": { "tokensPerSec": 20, "bucketSize": 40 }
+}
+},
+"idempotency": {
+"ttlSec": 86400,
+"backend": "memory"
+},
+"dlq": {
+"dir": "A:/Charity/relics/.runtime/dlq",
+"maxFiles": 10000
+},
+"metrics": {
+"port": 8140,
+"enableHttp": true,
+"healthPath": "/health",
+"metricsPath": "/metrics"
+}
+}

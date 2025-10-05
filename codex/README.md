@@ -75,3 +75,37 @@ This workflow boots a local NDJSON ingest server and runs the Scribe smoke scrip
 - Counter rollups every minute to `relics/.runtime/logs/metrics/YYYY-MM/metrics-YYYY-MM-DD.jsonl`
 - Configure: `METRICS_ROLLUP_INTERVAL_MS`, `METRICS_DIR`.
 - Optional fan-out of all Keeper events through Scribe: `SCRIBE_FANOUT=1`.
+
+## Keeper v0.4 — Queue QoS & Idempotency
+
+**What’s new**
+- Token-bucket rate limits per **hall** and **bee** (env-tunable).
+- File-hash idempotency (existing) documented + verified.
+- Canonical DLQ mirror at `relics/.runtime/dlq/` and DLQ logs to Scribe.
+- Embedded HTTP probes:
+  - `GET /health` → `{ ok, queueDepth }`
+  - `GET /metrics` → `{ queueDepth, processed, failed, skipped, rateLimitHits, duplicatesSkipped, overflowRejects }`
+• Bounded queue scan: `MAX_FILES_PER_TICK` (default 50)
+• Per-hall/bee token-bucket: RL_* envs (e.g., RL_TWITCH_TPS/CAP, RL_BEE_BUSY_TPS/CAP)
+• Blocking rate limit: `RL_MAX_WAIT_MS` (default 5000) — waits before send; no file-level fail
+• Idempotency: file-hash skip + processed catalog
+• DLQ: `relics/.runtime/dlq/` (only for hard fails)
+• Partial-fail safety: on mid-file error, remainder requeued as `requeue-*.jsonl`
+• Probes: `/health`, `/metrics`, `/debug`
+
+**Config via environment**
+KEEPER_METRICS_PORT=8140
+RL_TWITCH_TPS=5 RL_TWITCH_CAP=10
+RL_DISCORD_TPS=15 RL_DISCORD_CAP=30
+RL_AUDIO_TPS=5 RL_AUDIO_CAP=10
+RL_BEE_BUSY_TPS=2 RL_BEE_BUSY_CAP=4
+RL_BEE_MUSE_TPS=2 RL_BEE_MUSE_CAP=4
+RL_BEE_SHIELD_TPS=20 RL_BEE_SHIELD_CAP=40
+MAX_FILES_PER_TICK=10 # optional back-pressure cap
+
+**Smoke**
+- Flood Twitch/Busy: create a JSONL with 200 records (`type=qos-smoke, source=twitch, bee=busy`), then check `/metrics` → `rateLimitHits > 0`.
+- Duplicate file → `skipped` increments.
+- DLQ: drop one record with `type=force-error` → file appears in `relics/.runtime/dlq/`, `failed` increments.
+- Rate limit: drop 200-line `twitch/busy` JSONL → see `rateLimitHits > 0`, `processed > 0`.  
+- Requeue remainder: `node relics/smoke/keeper-requeue-smoke.mjs` → expect `keeper_requeued_records` and `requeue-*.jsonl`.
