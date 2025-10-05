@@ -2,8 +2,18 @@
 // halls/Discord/adapter.mjs 
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 let clientRef = null;
-export function getDiscordClient() { return clientRef; }
+import { RecentIdCache } from '#halls/common/recent-cache.mjs';
+import { metricsIngest } from '#sentry/metrics/rollup.mjs';
 
+const DISCORD_DEDUP_TTL  = Number(process.env.HALL_DISCORD_DEDUP_WINDOW_MS || process.env.HALL_DEDUP_WINDOW_MS || 10_000);
+const DISCORD_DEDUP_MAX  = Number(process.env.HALL_DISCORD_DEDUP_MAX || process.env.HALL_DEDUP_MAX || 2000);
+const discordDedup = new RecentIdCache({ ttlMs: DISCORD_DEDUP_TTL, max: DISCORD_DEDUP_MAX });
+// Startup grace (extra-aggressive dedupe window)
+const DISCORD_DEDUP_GRACE_MS = Number(process.env.HALL_DISCORD_DEDUP_STARTUP_GRACE_MS || process.env.HALL_DEDUP_STARTUP_GRACE_MS || 60_000);
+const discordContentDedup = new RecentIdCache({ ttlMs: DISCORD_DEDUP_GRACE_MS, max: DISCORD_DEDUP_MAX });
+const bootTs = Date.now();
+
+export function getDiscordClient() { return clientRef; }
 
 async function toUnified(msg, client){
   // reply → check the referenced message’s author
@@ -52,8 +62,22 @@ export default async function startHall(core, cfg){
   
 client.on('messageCreate', async (msg) => {
   if (msg.author?.bot) return;
+  // --- Duplicate-message debounce (Discord) ---
+  const msgId = msg.id || `${msg.author?.id}:${msg.createdTimestamp}:${msg.content}`;
+  const inGrace = (Date.now() - bootTs) < DISCORD_DEDUP_GRACE_MS;
+  const contentKey = `${msg.author?.id || 'anon'}::${msg.content || ''}`;
+  if (discordDedup.has(msgId) || (inGrace && discordContentDedup.has(contentKey))) {
+    const reason = discordDedup.has(msgId) ? 'msgId' : 'startup_grace_content';
+    console.log(`metric=hall_dedup_drop value=1 hall=discord reason=${reason} id=${JSON.stringify(msgId)} contentKey=${JSON.stringify(contentKey)}`);
+    try { metricsIngest?.({ type: 'hall_dedup_drop', hall: 'discord', reason }); } catch {}
+    return;
+  }
+  discordDedup.add(msgId);
+  if (inGrace) discordContentDedup.add(contentKey);
   try {
     const evt = await toUnified(msg, client);
+    // enrich meta for observability
+    evt.meta = { ...(evt.meta||{}), messageId: msgId, dedupeInGrace: inGrace };
     await core.ingest(evt);
   } catch (e) {
     console.error('[discord] ingest error:', e?.stack || e?.message || e);
