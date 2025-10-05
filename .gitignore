@@ -1,27 +1,55 @@
+# Node
 node_modules/
 npm-debug.log*
-yarn*.log*
+yarn.lock
 pnpm-lock.yaml
 
-dist/
-coverage/
-.cache/
-.vscode/
-.idea/
-
+# Env & runtime
+.env
+*.env.*
+*.log
+.relics/
 relics/.runtime/
 relics/.queue/
-relics/queue/incoming/
-relics/queue/processed/
-relics/queue/failed/
+relics/queue/
+runtime/
+logs/
+tmp/
 
-.env
-*.env
-*.pem
-*.pfx
-*.key
-*.crt
-tokens.json
-secrets.json
-*.sqlite
-*.db
+# Python/venv
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.pkl
+**/*.so
+**/*.dll
+**/*.dylib
+**/.venv*/
+**/venv*/
+relics/vad_streamer/.venv*/
+relics/vad_streamer/.venv*.bak/
+
+# Compiled/binaries & installers
+**/*.exe
+**/*.msi
+**/*.zip
+Archive/tools/bin/
+Archive/release/**/tools/bin/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Locally-produced mirrors & cache
+dist/
+build/
+coverage/
+
+
+# Allow-list smoke tests
+!relics/
+!relics/smoke/
+!relics/smoke/**
