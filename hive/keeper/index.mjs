@@ -15,8 +15,10 @@ import CONFIG from './config.mjs';
 import { createLogger } from './log.mjs';
 import Scribe from '../scribe/index.mjs';
 import { metricsIngest, startMetrics } from "#sentry/metrics/rollup.mjs";
-import { TokenBucket } from "./qos.mjs"; // exists in your tree
-import { scribeWrite } from "#hive/scribe/index.mjs";
+import { TokenBucket } from "./qos.mjs";
+import { scribeWriteWithRetry } from "#hive/scribe/index.mjs";
+import { registry, m_keeper_processed, m_keeper_qdepth, m_hall_dedup_drop } from '../metrics/prom.mjs';
+import { m_scribe_write, m_scribe_retry } from "#hive/metrics/prom.mjs";
 
 startMetrics();
 
@@ -40,6 +42,7 @@ const LOG_DIR = process.env.KEEPER_LOG_DIR ?? "relics/.runtime/logs/events";
 const LOG_FILE = process.env.KEEPER_LOG_FILE ?? "keeper.jsonl";
 const ECHO = (process.env.KEEPER_LOG_ECHO ?? "0") === "1";
 const ensureDir = (p) => fs.mkdirSync(p, { recursive: true });
+const METRICS_PORT = Number(process.env.KEEPER_METRICS_PORT || 8140);
 
 ensureDir(LOG_DIR);
 const logPath = path.join(LOG_DIR, LOG_FILE);
@@ -48,6 +51,9 @@ const out = fs.createWriteStream(logPath, { flags: "a" });
 // Retention policy
 const RETAIN_PROCESSED_DAYS = 7;
 const RETAIN_FAILED_DAYS = 30;
+
+const SMOKE = (process.env.SMOKE || 'false').toLowerCase() === 'true';
+const FAIL_RATIO = Number(process.env.SMOKE_FAKE_FAIL_RATIO || '0'); // e.g., 0.3..1.0
 
 // Internal state
 let _stopRequested = false;
@@ -187,6 +193,14 @@ async function processFile({ filePath, scribeSend }) {
       const rec = records[i];
       const hall = String(rec?.source || "unknown");
       const bee  = String(rec?.bee || rec?.target || "core");
+      const kind = String(rec?.kind || "unknown");
+
+      // Fast-path: simulate hall-level dedup drop if the record carries the flag
+      if (rec?.__dedupDropped === true) {
+        m_hall_dedup_drop.inc({ hall }, 1);
+        // Skip sending to scribe for dropped events
+        continue;
+      }
       // Block until tokens are available (bounded by RL_MAX_WAIT_MS)
       const maxWait = Number(process.env.RL_MAX_WAIT_MS || 5000); // 5s default
       const step    = 50;  // 50ms polling step
@@ -204,6 +218,8 @@ async function processFile({ filePath, scribeSend }) {
       }
       const ok = await withRetries(() => scribeSend(rec), { tries: 5, baseMs: 100, maxMs: 1500 });
       if (!ok) throw new Error('scribeSend returned false');
+      // Count successful processing
+      m_keeper_processed.inc({ hall, kind, result: 'ok' }, 1);
     }
     await markHashProcessed(hash);
     const finalName = `${path.basename(filePath)}`;
@@ -229,7 +245,14 @@ async function processFile({ filePath, scribeSend }) {
           await fsp.writeFile(requeuePath, payload, 'utf8');
           console.log(`metric=keeper_requeued_records value=${remainder.length} requeue=${JSON.stringify(requeueName)} from=${JSON.stringify(finalName)} failed_index=${i}`);
           keeperLog({ type: "keeper.partial_fail", file: finalName, requeued: requeueName, count: remainder.length, failed_index: i, error: String(e?.message || e) });
-          status = 'failed';
+      status = 'failed';
+      // Count as keeper error for the last seen record if available
+      try {
+        const rec = (Array.isArray(records) && i >= 0) ? records[i] : null;
+        const hall = String(rec?.source || "unknown");
+        const kind = String(rec?.kind || "unknown");
+        m_keeper_processed.inc({ hall, kind, result: 'error' }, 1);
+      } catch {}
           return status; // done — do NOT DLQ the whole file
         }
       }
@@ -301,10 +324,23 @@ function startHttpServer() {
   const server = http.createServer(async (req, res) => {
     try {
       const files = await fsp.readdir(QUEUE_DIR, { withFileTypes: true });
-	  const jsonl = files.filter(d => d.isFile() && d.name.toLowerCase().endsWith('.jsonl'));
-      const queueDepth = files.filter(d => d.isFile() && d.name.toLowerCase().endsWith('.jsonl')).length;
+      const jsonl = files.filter(d => d.isFile() && d.name.toLowerCase().endsWith('.jsonl'));
+      const queueDepth = jsonl.length;
+      // keep the gauge fresh
+      m_keeper_qdepth.set({ queue: 'ingest' }, queueDepth);
 	  
-      // quick introspection to verify paths and what's visible
+      if (req.url === '/metrics') {
+        const body = registry.toText();
+        res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+        return void res.end(body);
+      }
+
+      if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return void res.end(JSON.stringify({ ok: true, queueDepth }));
+      }
+
+      // quick introspection helper
       if (req.url === '/debug') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return void res.end(JSON.stringify({
@@ -323,27 +359,6 @@ function startHttpServer() {
           queueDepth,
           jsonlSample: jsonl.slice(0, 10).map(d => d.name)
         }, null, 2));
-      }
-
-      if (req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return void res.end(JSON.stringify({ ok: true, queueDepth }));
-      }
-
-      if (req.url === '/metrics') {
-        // _counters exists in your file; if you later add _qos, it’ll show here too.
-        const payload = {
-          ts: new Date().toISOString(),
-          queueDepth,
-          processed: _counters?.processed ?? 0,
-          failed: _counters?.failed ?? 0,
-          skipped: _counters?.skipped ?? 0,
-          rateLimitHits: (globalThis._qos?.rateLimitHits) ?? 0,
-          duplicatesSkipped: (globalThis._qos?.duplicatesSkipped) ?? 0,
-          overflowRejects: (globalThis._qos?.overflowRejects) ?? 0
-        };
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return void res.end(JSON.stringify(payload));
       }
 
       res.writeHead(404); res.end();
@@ -390,7 +405,7 @@ export function start({ intervalMs = 2000, scribeSend } = {}) {
     try {
       await retentionSweepOnce();
       const maxFilesPerTick = Number(process.env.MAX_FILES_PER_TICK || 50);
-      await processQueueOnce({ scribeSend, maxFilesPerTick });
+      await processQueueOnce({ scribeSend: scribeWriteWithRetry, maxFilesPerTick });
     } catch (e) {
       console.log(`metric=keeper_tick_errors value=1 error=${JSON.stringify(String(e?.message || e))}`);
     } finally { writeHeartbeat(); }
@@ -443,6 +458,7 @@ async function run() {
     await delay(CONFIG.INTERVAL_MS);
   }
 }
+
 //const isDirectRun = (() => {
   //try { return import.meta.url === pathToFileURL(process.argv[1]).href; }
   //catch { return false; }
@@ -470,7 +486,32 @@ export function keeperLog(event) {
   try { metricsIngest(rec); } catch {}
   if ((process.env.SCRIBE_FANOUT ?? "0") === "1") {
     // fan out asynchronously, don't block
-    Promise.resolve().then(() => scribeWrite(rec)).catch(() => {});
+    Promise.resolve()
+     .then(() => scribeWriteWithRetry(rec))
+     .catch(() => {});
+  }
+}
+  export async function handleEvent(evt){
+  // Update queue depth if you track it
+  // (queue depth now set in HTTP handler; optional to keep this if you
+  //  update depth elsewhere in your loop)
+  
+  // Example de-dup path
+  if (evt.__dedupDropped) {
+    m_hall_dedup_drop.inc({ hall: evt.hall || 'unknown' }, 1);
+    return { result: 'dedup_drop' };
+  }
+
+  // Normal processing
+  try {
+    const kind = evt.kind || 'unknown';
+    // ... your processing ...
+    m_keeper_processed.inc({ kind, hall: evt.hall || 'unknown', result: 'ok' }, 1);
+    return { result: 'ok' };
+  } catch (err) {
+    const kind = evt.kind || 'unknown';
+    m_keeper_processed.inc({ kind, hall: evt.hall || 'unknown', result: 'error' }, 1);
+    throw err;
   }
 }
 
