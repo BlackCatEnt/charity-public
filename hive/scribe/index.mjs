@@ -2,7 +2,12 @@
 import { makeTransport } from "./transport.mjs";
 import { withRetry } from "./backoff.mjs";
 import { counter, flush, setDefaultMetricTags } from "./metrics.mjs";
+// Scribe = producer only. Export/roll-up handled by Sentry.
+import { m_scribe_write, m_scribe_retry } from '../metrics/prom.mjs';
 import os from "node:os";
+
+const SMOKE_MODE = process.env.SMOKE === 'true';
+const FAKE_FAIL_RATIO = Number(process.env.SMOKE_FAKE_FAIL_RATIO || '0'); // e.g., 0.3
 
 const defaultTags = {
   app: process.env.APP_NAME || "charity",
@@ -80,8 +85,33 @@ export async function sendLines(ndjsonLines) {
 export async function scribeWrite(payload) {
   const lines = toNdjsonLines(payload);
   if (lines.length === 0) return true;
+   // smoke: probabilistic failure to force retries
+  if (SMOKE_MODE && Math.random() < FAKE_FAIL_RATIO) {
+    m_scribe_write.inc({ result: 'retry' }, 1);
+    m_scribe_retry.inc({ reason: 'transport' }, 1);
+    throw new Error('SMOKE_FAKE_FAIL');
+  }
+  // normal write
+  // await transport.send(payload)
+  m_scribe_write.inc({ result: 'ok' }, 1);
   await sendLines(lines);
   return true;
+}
+
+export async function scribeWriteWithRetry(payload, max = 3) {
+  let attempt = 0;
+  while (attempt < max) {
+    try {
+      return await scribeWrite(payload);
+    } catch (e) {
+      attempt++;
+      if (attempt >= max) {
+        m_scribe_write.inc({ result: 'fail' }, 1);
+        throw e;
+      }
+      await new Promise(r => setTimeout(r, 10));
+    }
+  }
 }
 
 // Lightweight OO wrapper for callers that expect a constructor.
