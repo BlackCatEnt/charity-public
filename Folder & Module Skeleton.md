@@ -3,6 +3,10 @@
 _(Auto-generated; depth = 3)_
 
 A:\Charity\
+.github\
+  workflows\
+    ci.yml
+    keeper-probe.yml
 adapters\
   discord.mjs
   twitch.mjs
@@ -23,10 +27,13 @@ codex\
 core\
   router.mjs
 docs\
+  ALERTS.md
   ARCHITECTURE.md
 halls\
   audio\
     adapter.mjs
+  common\
+    recent-cache.mjs
   discord\
     adapter.mjs
   shared\
@@ -47,10 +54,17 @@ hive\
     index.mjs
   keeper\
     config.mjs
+    dlq.mjs
     index.mjs
+    keeper.config.json
     log.mjs
+    qos.mjs
+  metrics\
+    prom.mjs
   scribe\
     backoff.mjs
+    backpressure.mjs
+    client.mjs
     index.mjs
     metrics.mjs
     transport.mjs
@@ -130,6 +144,14 @@ relics\
     Scripts\
   dev\
     scribe-dev-server.mjs
+  queue\
+    incoming\
+  smoke\
+    keeper-prom-smoke.mjs
+    keeper-requeue-smoke.mjs
+    scribe-backpressure-smoke.mjs
+    seed-queue.mjs
+    smoke-prom-assert.mjs
   vad_streamer\
     .venv311\
     .venv311.bak\
@@ -149,7 +171,6 @@ rituals\
 sentry\
   emotes.mjs
   gamewatch.mjs
-  metrics-exporter.mjs
   logs\
   metrics\
     rollup.mjs
