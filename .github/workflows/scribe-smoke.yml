@@ -1,0 +1,53 @@
+name: Scribe smoke
+
+on:
+  push:
+    branches: [ "v0.3-next" ]
+  pull_request:
+    branches: [ "v0.3-next" ]
+
+permissions:
+  contents: read
+
+jobs:
+  scribe-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+       - name: Start dev ingest server
+        run: |
+          nohup node relics/dev/scribe-dev-server.mjs 8787 --fail-rate=0.15 > server.log 2>&1 &
+          echo $! > server.pid
+          echo "PID=$(cat server.pid)"
+          # wait for the server to accept connections
+          for i in {1..40}; do
+            curl -sS -X POST http://127.0.0.1:8787/ingest >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+
+      - name: Run smoke against local ingest
+        env:
+          # Keep it deterministic-ish: we don't inject client-side failures here.
+          SCRIBE_TRANSPORT_URL: "http://127.0.0.1:8787/ingest"
+          SCRIBE_BACKOFF_BASE_MS: "100"
+          SCRIBE_BACKOFF_FACTOR: "2"
+          SCRIBE_BACKOFF_CAP_MS: "3000"
+          SCRIBE_BACKOFF_MAX_RETRIES: "5"
+          SCRIBE_METRICS_AUTOFLUSH: "1"
+        run: |
+          node relics/smoke-scribe.mjs --n=20 --batch=5
+
+      - name: Stop dev ingest server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then kill "$(cat server.pid)" || true; fi
+          echo "---- server.log (tail) ----"
+          if [ -f server.log ]; then tail -n 200 server.log || true; fi
