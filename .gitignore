@@ -1,5 +1,6 @@
 # Ignore environment variables
 .env
+.env/
 *.env
 
 # Ignore token storage
@@ -110,3 +111,31 @@ relics/.runtime/
 
 .venv*/
 relics/vad_streamer/.venv*/
+# runtime + secrets
+.env
+.env.*
+relics/.runtime/
+relics/.runtime/**
+relics/.runtime/logs/
+relics/.runtime/metrics/
+
+# local Python venvs
+relics/vad_streamer/.venv*/
+relics/vad_streamer/.venv*/**
+
+# Node / logs / misc
+node_modules/
+*.log
+*.tmp
+
+# mirror worktree
+.public-mirror/
+
+sentry/metrics/
+*.yml text eol=lf
+*.yaml text eol=lf
+
+prometheus/data/
+grafana/storage/
+**/.DS_Store
+**/Thumbs.db
