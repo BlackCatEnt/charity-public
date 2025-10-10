@@ -1,14 +1,17 @@
-﻿# Folder & Module Skeleton
+# Folder & Module Skeleton
 
 _(Auto-generated; depth = 3)_
 
 A:\Charity\
+.github\
+  workflows\
+    ci.yml
 adapters\
   discord.mjs
   twitch.mjs
   asr.service\
-    .venv\
     __pycache__\
+    .venv\
 Archive\
 boot\
   index.mjs
@@ -23,10 +26,34 @@ codex\
 core\
   router.mjs
 docs\
+  ALERTS.md
   ARCHITECTURE.md
+grafana\
+  csv\
+  dashboards\
+    Charity\
+  pdf\
+  plugins\
+    grafana-exploretraces-app\
+    grafana-lokiexplore-app\
+    grafana-metricsdrilldown-app\
+    grafana-pyroscope-app\
+  png\
+  provisioning\
+    dashboards\
+    datasources\
+  storage\
+    csv\
+    dashboards\
+    pdf\
+    plugins\
+    png\
+    storage\
 halls\
   audio\
     adapter.mjs
+  common\
+    recent-cache.mjs
   discord\
     adapter.mjs
   shared\
@@ -46,9 +73,21 @@ hive\
   herald\
     index.mjs
   keeper\
+    config.mjs
+    dlq.mjs
     index.mjs
+    keeper.config.json
+    log.mjs
+    qos.mjs
+  metrics\
+    prom.mjs
   scribe\
+    backoff.mjs
+    backpressure.mjs
+    client.mjs
     index.mjs
+    metrics.mjs
+    transport.mjs
 logs\
 mind\
   affect.mjs
@@ -95,24 +134,28 @@ relics\
   embeddings.mjs
   embeddings.ollama.mjs
   generate-skeleton.ps1
-  helix.mjs
+  health-keeper.ps1
+  health-sentry.ps1
   helix-get-users.mjs
   helix-smoke.mjs
+  helix.mjs
+  mirror-to-public.ps1
   path-checker.mjs
   paths.mjs
+  publish-public.ps1
   publish.mjs
   publish.ps1
-  publish-public.ps1
   reindex-kb.mjs
   repo-health.ps1
   run-keeper.mjs
   smoke-herald-scribe.mjs
   smoke-keeper.mjs
+  smoke-scribe.mjs
   sqlite.mjs
   Start-CharityAudioIngest.ps1
   telemetry.mjs
-  tokens.mjs
   tokens-repair.mjs
+  tokens.mjs
   twitch-validate.mjs
   .queue\
   .runtime\
@@ -120,6 +163,27 @@ relics\
     Include\
     Lib\
     Scripts\
+  alertmanager\
+    alertmanager.yml
+  compose\
+    monitoring.yml
+  dev\
+    keeper-8131.mjs
+    scribe-8132.mjs
+    scribe-dev-server.mjs
+  prometheus\
+    prometheus.yml
+    rules\
+    targets\
+  queue\
+    incoming\
+  smoke\
+    keeper-prom-smoke.mjs
+    keeper-requeue-smoke.mjs
+    scribe-backpressure-smoke.mjs
+    seed-queue.mjs
+    sentry-aggregator-smoke.mjs
+    smoke-prom-assert.mjs
   vad_streamer\
     .venv311\
     .venv311.bak\
@@ -137,9 +201,17 @@ rituals\
   snapshots\
     weekly\
 sentry\
+  aggregator.mjs
   emotes.mjs
   gamewatch.mjs
-  metrics-exporter.mjs
+  index.mjs
+  sentry.targets.json
+  server.mjs
+  exporters\
+    pushgateway.mjs
+  logs\
+  metrics\
+    rollup.mjs
 soul\
   cache\
   games\
