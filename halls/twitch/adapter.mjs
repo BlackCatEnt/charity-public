@@ -6,7 +6,16 @@ import { getTwitchToken, refreshTwitch, scheduleTwitchAutoRefresh } from '#relic
 import { validateTwitch } from '#relics/twitch-validate.mjs';
 import { createGuildGuard } from '#mind/guild_guard.mjs';
 import modConf from '#codex/moderation.config.json' assert { type: 'json' };
+import { RecentIdCache } from '#halls/common/recent-cache.mjs';
+import { metricsIngest } from '#sentry/metrics/rollup.mjs';
 
+const TWITCH_DEDUP_TTL  = Number(process.env.HALL_TWITCH_DEDUP_WINDOW_MS || process.env.HALL_DEDUP_WINDOW_MS || 10_000);
+const TWITCH_DEDUP_MAX  = Number(process.env.HALL_TWITCH_DEDUP_MAX || process.env.HALL_DEDUP_MAX || 2000);
+const twitchDedup = new RecentIdCache({ ttlMs: TWITCH_DEDUP_TTL, max: TWITCH_DEDUP_MAX });
+// Startup grace (extra-aggressive dedupe window)
+const TWITCH_DEDUP_GRACE_MS = Number(process.env.HALL_TWITCH_DEDUP_STARTUP_GRACE_MS || process.env.HALL_DEDUP_STARTUP_GRACE_MS || 60_000);
+const twitchContentDedup = new RecentIdCache({ ttlMs: TWITCH_DEDUP_GRACE_MS, max: TWITCH_DEDUP_MAX });
+const bootTs = Date.now();
 
 export default async function startHall(core, cfg) {
   const channel = (process.env.TWITCH_BROADCASTER || cfg?.twitch?.channel || '').toLowerCase();
@@ -69,6 +78,25 @@ export default async function startHall(core, cfg) {
 
   client.on('message', async (channelName, tags, message, self) => {
     if (self) return;
+
+    // --- Duplicate-message debounce (Twitch) ---
+    // Prefer canonical Twitch message id; fall back to a deterministic composite.
+    const msgId =
+      tags?.id ||
+      tags?.['message-id'] || // some libs set this
+      `${tags?.['user-id'] || tags?.username || 'anon'}:${tags?.tmiSentTs || tags?.['tmi-sent-ts'] || ''}:${message}`;
+    const inGrace = (Date.now() - bootTs) < TWITCH_DEDUP_GRACE_MS;
+    // During grace, also dedupe by content-per-user (catches replayed messages with new IDs)
+    const contentKey = `${tags?.['user-id'] || tags?.username || 'anon'}::${message}`;
+
+    if (twitchDedup.has(msgId) || (inGrace && twitchContentDedup.has(contentKey))) {
+      const reason = twitchDedup.has(msgId) ? 'msgId' : 'startup_grace_content';
+      console.log(`metric=hall_dedup_drop value=1 hall=twitch reason=${reason} id=${JSON.stringify(msgId)} contentKey=${JSON.stringify(contentKey)}`);
+      try { metricsIngest?.({ type: 'hall_dedup_drop', hall: 'twitch', reason }); } catch {}
+      return;
+    }
+    twitchDedup.add(msgId);
+    if (inGrace) twitchContentDedup.add(contentKey);
     // 1) Guard runs first (fast). If it acts, stop here.
 	try {
 	       const acted = await guard.onMessage(
@@ -107,7 +135,7 @@ export default async function startHall(core, cfg) {
         userName: tags['display-name'] ?? tags['username'] ?? '',
         text: message,
         ts: Date.now(),
-        meta: { rawTags: tags, replyToMe }
+        meta: { rawTags: tags, replyToMe, messageId: msgId, dedupeInGrace: inGrace }
       });
     } catch (e) {
       console.error('[twitch] ingest error:', e?.message || e);

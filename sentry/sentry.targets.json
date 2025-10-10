@@ -1,0 +1,5 @@
+{
+"keeper": ["http://127.0.0.1:8131/metrics"],
+"scribe": ["http://127.0.0.1:8132/metrics"],
+"halls": []
+}

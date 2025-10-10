@@ -15,18 +15,20 @@
     "#core/*": "./mind/*",
     "#boot/*": "./boot/*",
     "#adapters/*": "./halls/*",
-    "#hive/*": "./hive/*",
-    "#relics/* #hive/*": [
-      "./relics/*",
-      "./hive/*"
-    ]
+    "#hive/*": "./hive/*"
   },
   "scripts": {
     "start": "node boot/index.mjs",
     "check": "node relics/path-checker.mjs",
     "fb:snapshot": "node rituals/cli/feedback-snapshot.mjs --window=7d",
     "preflight": "npm run check && node relics/helix-smoke.mjs",
-    "mem:backfill": "node rituals/cli/memory-backfill.mjs --days=30"
+    "mem:backfill": "node rituals/cli/memory-backfill.mjs --days=30",
+	"metrics:tail": "node -e \"const fs=require('fs');const f='relics/.runtime/logs/metrics/'+new Date().toISOString().slice(0,7)+'/metrics-'+new Date().toISOString().slice(0,10)+'.jsonl';fs.existsSync(f)&&fs.createReadStream(f,{encoding:'utf8'}).on('data',d=>process.stdout.write(d));\"",
+    "scribe:test": "node -e \"fetch(process.env.SCRIBE_TRANSPORT_URL||'http://127.0.0.1:9000/ingest',{method:'POST',headers:{'content-type':'application/json'},body:'{\"ping\":true}'}).then(r=>console.log(r.status)).catch(e=>console.error(e))\"",
+    "sentry": "node ./sentry/index.mjs",
+    "dev:keeper": "node ./relics/dev/keeper-8131.mjs",
+    "dev:scribe": "node ./relics/dev/scribe-8132.mjs",
+    "smoke:sentry": "node ./relics/smoke/sentry-aggregator-smoke.mjs"  
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
