@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci || npm i
+
+      - name: Seed queue with fresh events
+        run: node ./relics/smoke/seed-queue.mjs
+
+      - name: Start Keeper (smoke) in background
+        env:
+          SMOKE: 'true'
+          SMOKE_FAKE_FAIL_RATIO: '0.5'
+          KEEPER_METRICS_PORT: '8140'
+        run: |
+          node ./relics/smoke-keeper.mjs &
+          echo $! > keeper.pid
+          # wait for first tick to process files
+          sleep 2
+
+      - name: Assert Prom metrics
+        env:
+          SMOKE: 'true'
+          KEEPER_METRICS_PORT: '8140'
+        run: node ./relics/smoke/smoke-prom-assert.mjs
+
+      - name: Dump /metrics on failure
+        if: failure()
+        run: curl -sS http://127.0.0.1:8140/metrics || true
+
+      - name: Teardown
+        if: always()
+        run: |
+          if [ -f keeper.pid ]; then kill "$(cat keeper.pid)" || true; fi
