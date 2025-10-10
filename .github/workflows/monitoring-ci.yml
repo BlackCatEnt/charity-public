@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # promtool via Docker (override entrypoint)
+      # promtool via Docker (direct entrypoint for single file)
       - name: promtool check config
         run: |
           docker run --rm \
@@ -20,25 +20,34 @@ jobs:
             prom/prometheus:latest \
             check config /work/relics/prometheus/prometheus.yml
 
+      # For rules we need a shell loop inside the container
       - name: promtool check rules
         run: |
           docker run --rm \
             -v "$GITHUB_WORKSPACE":/work \
-            --entrypoint /bin/promtool \
+            --entrypoint /bin/sh \
             prom/prometheus:latest \
-            sh -lc 'set -e; shopt -s nullglob; for f in /work/relics/prometheus/rules/*.yml /work/relics/prometheus/rules/*.yaml; do echo "→ checking $f"; promtool check rules "$f"; done'
+            -lc '
+              set -eu
+              found=0
+              for f in /work/relics/prometheus/rules/*.yml /work/relics/prometheus/rules/*.yaml; do
+                [ -f "$f" ] || continue
+                echo "→ checking $f"
+                /bin/promtool check rules "$f"
+                found=1
+              done
+              if [ "$found" -eq 0 ]; then
+                echo "No rules files found under /work/relics/prometheus/rules – skipping."
+              fi
+            '
 
   lint-yaml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Install yamllint
         run: sudo pip install yamllint
-
-      # Relax lint so we catch *syntax* issues but don't bikeshed style
       - name: Run yamllint (prom & grafana provisioning)
-        # Set to 'true' to keep the build green even if style issues are found
         continue-on-error: true
         run: |
           yamllint \
