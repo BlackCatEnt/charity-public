@@ -109,3 +109,110 @@ MAX_FILES_PER_TICK=10 # optional back-pressure cap
 - DLQ: drop one record with `type=force-error` → file appears in `relics/.runtime/dlq/`, `failed` increments.
 - Rate limit: drop 200-line `twitch/busy` JSONL → see `rateLimitHits > 0`, `processed > 0`.  
 - Requeue remainder: `node relics/smoke/keeper-requeue-smoke.mjs` → expect `keeper_requeued_records` and `requeue-*.jsonl`.
+
+### v0.5 — Scribe backpressure + durable retry
+
+**Batching**
+- Flush on size (`SCRIBE_BATCH_MAX`) or time (`SCRIBE_FLUSH_MS`).
+- Exponential backoff with jitter on failure; cap via `SCRIBE_BACKOFF_MAX_MS`.
+
+**Durable retry**
+- Failed batches spill to `relics/.runtime/scribe_retry/` (JSON).
+- TTL via `SCRIBE_RETRY_TTL_MS`; expired → `relics/.runtime/dlq/` with `scribe.dlq` log.
+
+**Metrics**
+- Counters: `scribe_inflight`, `scribe_batches_flushed`, `scribe_retry_count`, `scribe_dropped_ttl`, `scribe_queue_depth`.
+- Latency: `scribe_flush_ms` p50 / p95 (rolling).
+- Probe: `GET /scribe/metrics` JSON.
+Keeper exposes Prometheus text metrics on `http://127.0.0.1:8140/metrics`:
+
+- `keeper_processed_total{hall,kind,result}`
+- `keeper_queue_depth{queue}`
+- `scribe_write_total{result}`
+- `scribe_retry_total{reason}`
+- `hall_dedup_drop_total{hall}`
+
+Quick check:
+```bash
+curl -s http://127.0.0.1:8140/metrics | grep keeper_processed_total
+
+**ENV**
+- SCRIBE_BATCH_MAX=100
+- SCRIBE_FLUSH_MS=250
+- SCRIBE_BACKOFF_BASE_MS=250
+- SCRIBE_BACKOFF_MAX_MS=5000
+- SCRIBE_JITTER_PCT=0.2
+- SCRIBE_RETRY_TTL_MS=300000
+
+**Smoke**
+- `node relics/smoke/scribe-backpressure-smoke.mjs`
+- Expect: `batches_flushed >= 1`, `retry_count >= 0`, `dropped_ttl == 0` during normal runs.
+
+**Smoke expectations (CI)**
+- In smoke mode (SMOKE=true SMOKE_FAKE_FAIL_RATIO=0.3):
+- keeper_processed_total{result="ok"} > 0
+- hall_dedup_drop_total > 0
+- scribe_retry_total{reason="transport"} > 0
+- CI fails if any regress to zero.
+
+---
+
+# How this satisfies your ACs
+
+- **/metrics with labeled counters** → `prom.mjs` + keeper/scribe hooks expose Prom text on **8140**.  
+  *AC:* `curl http://127.0.0.1:8140/metrics` returns counters/gauges exactly as Prom expects.
+- **Smoke passes; CI fails on regressions** → `smoke-prom-assert.mjs` enforces non-zero `processed`, `dedup_drop`, and `scribe_retry` (under smoke). GH Actions job fails if not met.
+- **README + alerts** → README block and `docs/ALERTS.md` included.
+
+---
+
+# Suggested commit sequence
+
+```bash
+git checkout -b feat/v0.5-metrics
+git add hive/metrics/prom.mjs hive/keeper/index.mjs hive/scribe/index.mjs \
+        relics/smoke/keeper-prom-smoke.mjs relics/smoke/smoke-prom-assert.mjs \
+        docs/ALERTS.md README.md .github/workflows/ci.yml
+git commit -m "v0.5: Prom-style /metrics + smoke/CI assertions + starter alerts"
+git push -u origin feat/v0.5-metrics
+
+## Sentry aggregator (v0.6)
+
+Scrapes producer `/metrics` (Keeper, Scribe, Halls), adds `service`/`instance`, re-exports at `:8150/metrics`. Optional: push to Pushgateway.
+
+### Configure targets
+`sentry/sentry.targets.json`:
+```json
+{
+  "keeper": ["http://127.0.0.1:8131/metrics"],
+  "scribe": ["http://127.0.0.1:8132/metrics"],
+  "halls": []
+}
+
+Run (dev)
+$env:SENTRY_TARGETS_FILE="sentry/sentry.targets.json"
+$env:SENTRY_PORT="8150"
+node .\sentry\index.mjs
+
+Probes:
+GET /readyz  -> {"ready": true} after first scrape
+GET /metrics -> self metrics + merged producers (Prom text)
+
+Optional export:
+$env:EXPORT_PUSHGATEWAY_URL="http://127.0.0.1:9091"
+$env:EXPORT_INTERVAL_MS="20000"
+node .\sentry\index.mjs
+
+
+# 6) Dev QoL scripts (Windows-friendly)
+If you want easy start/stop for dev producers, you already added the `.mjs` files. Consider adding npm scripts in `package.json`:
+
+```json
+{
+  "scripts": {
+    "sentry": "node ./sentry/index.mjs",
+    "dev:keeper": "node ./relics/dev-producers/keeper-8131.mjs",
+    "dev:scribe": "node ./relics/dev-producers/scribe-8132.mjs",
+    "smoke:sentry": "node ./relics/smoke/sentry-aggregator-smoke.mjs"
+  }
+}

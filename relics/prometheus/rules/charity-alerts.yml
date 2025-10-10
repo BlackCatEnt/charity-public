@@ -1,0 +1,37 @@
+groups:
+  - name: charity.sentry
+    rules:
+      # 1) Sentry exporter looks stale
+      # Alert when the last successful 'up' sample for the charity-sentry job is older than 2 minutes.
+      - alert: SentryExporterStale
+        expr: time() - max(timestamp(up{job="charity-sentry"})) > 120
+        for: 5m
+        labels:
+          severity: warning
+          service: sentry
+        annotations:
+          summary: "Sentry exporter looks stale"
+          description: "No fresh samples for job=charity-sentry for >2m (over 5m window). Check the exporter or scrape path."
+
+      # 2) Sentry scrape errors increased
+      # Uses your exporter metric from the dashboard.
+      - alert: SentryScrapeErrors
+        expr: increase(sentry_scrape_errors_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: sentry
+        annotations:
+          summary: "Sentry scrape errors detected"
+          description: "sentry_scrape_errors_total increased in the last 5m."
+
+      # 3) Sentry target down (belt-and-suspenders)
+      - alert: SentryTargetDown
+        expr: max(up{job="charity-sentry"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: sentry
+        annotations:
+          summary: "Sentry target is DOWN"
+          description: "Prometheus reports up=0 for job=charity-sentry for 2m."
