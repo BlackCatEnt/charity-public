@@ -46,6 +46,8 @@ export class PromRegistry {
   counter(name, help){ const c = new Counter(name, help); this.items.push(c); return c; }
   gauge(name, help){ const g = new Gauge(name, help); this.items.push(g); return g; }
   toText(){ return this.items.map(i => i.toText()).join('\n'); }
+  // Prometheus text exposition requires a trailing newline
+  toText(){ return this.items.map(i => i.toText()).join('\n') + '\n'; }
 }
 
 // Singleton (simple)
@@ -55,3 +57,12 @@ export const m_keeper_qdepth   = registry.gauge('keeper_queue_depth','Current qu
 export const m_scribe_write    = registry.counter('scribe_write_total','Scribe write attempts');
 export const m_scribe_retry    = registry.counter('scribe_retry_total','Scribe retries by reason');
 export const m_hall_dedup_drop = registry.counter('hall_dedup_drop_total','Events dropped by hall de-dup');
+// --- New counters requested for prod wiring (zero-dep registry) ---
+export const m_keeper_events_total   = registry.counter(
+  'keeper_events_total',
+  'Total number of events processed by Keeper.'
+);
+export const m_scribe_batches_total  = registry.counter(
+  'scribe_batches_total',
+  'Total number of records flushed by Scribe (sum of batch sizes).'
+);
