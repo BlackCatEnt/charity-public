@@ -175,3 +175,55 @@ git add hive/metrics/prom.mjs hive/keeper/index.mjs hive/scribe/index.mjs \
         docs/ALERTS.md README.md .github/workflows/ci.yml
 git commit -m "v0.5: Prom-style /metrics + smoke/CI assertions + starter alerts"
 git push -u origin feat/v0.5-metrics
+
+## Sentry aggregator (v0.6)
+
+Scrapes producer `/metrics` (Keeper, Scribe, Halls), adds `service`/`instance`, re-exports at `:8150/metrics`. Optional: push to Pushgateway.
+
+### Configure targets
+`sentry/sentry.targets.json`:
+```json
+{
+  "keeper": ["http://127.0.0.1:8131/metrics"],
+  "scribe": ["http://127.0.0.1:8132/metrics"],
+  "halls": []
+}
+
+Run (dev)
+$env:SENTRY_TARGETS_FILE="sentry/sentry.targets.json"
+$env:SENTRY_PORT="8150"
+node .\sentry\index.mjs
+
+Probes:
+GET /readyz  -> {"ready": true} after first scrape
+GET /metrics -> self metrics + merged producers (Prom text)
+
+Optional export:
+$env:EXPORT_PUSHGATEWAY_URL="http://127.0.0.1:9091"
+$env:EXPORT_INTERVAL_MS="20000"
+node .\sentry\index.mjs
+
+
+# 6) Dev QoL scripts (Windows-friendly)
+If you want easy start/stop for dev producers, you already added the `.mjs` files. Consider adding npm scripts in `package.json`:
+
+```json
+{
+  "scripts": {
+    "sentry": "node ./sentry/index.mjs",
+    "dev:keeper": "node ./relics/dev-producers/keeper-8131.mjs",
+    "dev:scribe": "node ./relics/dev-producers/scribe-8132.mjs",
+    "smoke:sentry": "node ./relics/smoke/sentry-aggregator-smoke.mjs"
+  }
+}
+## v0.5.0 — Monitoring patch
+- New: Prometheus + Alertmanager + Grafana stack with provisioning
+- New: Sentry exporter alerts (staleness/scrape errors/target down)
+- New: Keeper/Scribe Overview dashboard with Alertmanager panel
+- Ops: `.env.example` introduced; real `.env` is gitignored
+- Note: Using latest Grafana for UI improvements; pin if regressions appear
+If latest images regress:
+grafana/grafana:10.4.5
+prom/prometheus:v3.6.0
+prom/alertmanager:v0.27.0
+prom/pushgateway:v1.8.0

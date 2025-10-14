@@ -6,7 +6,6 @@ A:\Charity\
 .github\
   workflows\
     ci.yml
-    keeper-probe.yml
 adapters\
   discord.mjs
   twitch.mjs
@@ -29,6 +28,27 @@ core\
 docs\
   ALERTS.md
   ARCHITECTURE.md
+grafana\
+  csv\
+  dashboards\
+    Charity\
+  pdf\
+  plugins\
+    grafana-exploretraces-app\
+    grafana-lokiexplore-app\
+    grafana-metricsdrilldown-app\
+    grafana-pyroscope-app\
+  png\
+  provisioning\
+    dashboards\
+    datasources\
+  storage\
+    csv\
+    dashboards\
+    pdf\
+    plugins\
+    png\
+    storage\
 halls\
   audio\
     adapter.mjs
@@ -115,6 +135,7 @@ relics\
   embeddings.ollama.mjs
   generate-skeleton.ps1
   health-keeper.ps1
+  health-sentry.ps1
   helix-get-users.mjs
   helix-smoke.mjs
   helix.mjs
@@ -142,8 +163,18 @@ relics\
     Include\
     Lib\
     Scripts\
+  alertmanager\
+    alertmanager.yml
+  compose\
+    monitoring.yml
   dev\
+    keeper-8131.mjs
+    scribe-8132.mjs
     scribe-dev-server.mjs
+  prometheus\
+    prometheus.yml
+    rules\
+    targets\
   queue\
     incoming\
   smoke\
@@ -151,6 +182,7 @@ relics\
     keeper-requeue-smoke.mjs
     scribe-backpressure-smoke.mjs
     seed-queue.mjs
+    sentry-aggregator-smoke.mjs
     smoke-prom-assert.mjs
   vad_streamer\
     .venv311\
@@ -169,8 +201,14 @@ rituals\
   snapshots\
     weekly\
 sentry\
+  aggregator.mjs
   emotes.mjs
   gamewatch.mjs
+  index.mjs
+  sentry.targets.json
+  server.mjs
+  exporters\
+    pushgateway.mjs
   logs\
   metrics\
     rollup.mjs
