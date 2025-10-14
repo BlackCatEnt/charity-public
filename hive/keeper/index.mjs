@@ -5,9 +5,9 @@
 
 import http from 'node:http';
 import fs from 'node:fs';
+import fsp from 'fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import fsp from 'fs/promises';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,9 +17,10 @@ import Scribe from '../scribe/index.mjs';
 import { metricsIngest, startMetrics } from "#sentry/metrics/rollup.mjs";
 import { TokenBucket } from "./qos.mjs";
 import { scribeWriteWithRetry } from "#hive/scribe/index.mjs";
-import { registry, m_keeper_processed, m_keeper_qdepth, m_hall_dedup_drop } from '../metrics/prom.mjs';
+import { registry, m_keeper_processed, m_keeper_qdepth, m_hall_dedup_drop, m_keeper_events_total } from '../metrics/prom.mjs';
+import { createPushgatewayPusher } from "#hive/metrics/pushgateway.mjs";
 import { m_scribe_write, m_scribe_retry } from "#hive/metrics/prom.mjs";
-
+let __keeperPgw; // hold pusher for shutdown
 startMetrics();
 
 
@@ -85,8 +86,9 @@ function exclusiveLock() {
     fs.writeFileSync(fd, payload);
     fs.closeSync(fd);
     const release = () => { try { if (_isOwnerOfLock) fs.unlinkSync(LOCK_FILE); } catch {} _isOwnerOfLock = false; };
-    const shutdown = () => {
+    const shutdown = async () => {
       _stopRequested = true;
+      try { await __keeperPgw?.stop(); } catch {}
       try { globalThis.__keeperHttpServer?.close(); } catch {}
       release();
       process.exit(0);
@@ -220,6 +222,8 @@ async function processFile({ filePath, scribeSend }) {
       if (!ok) throw new Error('scribeSend returned false');
       // Count successful processing
       m_keeper_processed.inc({ hall, kind, result: 'ok' }, 1);
+      // NEW: canonical total counter (post-success)
+      m_keeper_events_total.inc({ hall, kind }, 1);
     }
     await markHashProcessed(hash);
     const finalName = `${path.basename(filePath)}`;
@@ -329,6 +333,14 @@ function startHttpServer() {
       // keep the gauge fresh
       m_keeper_qdepth.set({ queue: 'ingest' }, queueDepth);
 	  
+      if (req.method === 'POST' && req.url === '/shutdown') {
+        // graceful stop that clears PGW even when no OS signal is delivered
+        try { await __keeperPgw?.stop(); } catch {}
+        try { if (_isOwnerOfLock) { fs.unlinkSync(LOCK_FILE); _isOwnerOfLock = false; } } catch {}
+        res.writeHead(200).end("ok");
+        process.exit(0);
+        return;
+      }
       if (req.url === '/metrics') {
         const body = registry.toText();
         res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
@@ -385,7 +397,18 @@ export function start({ intervalMs = 2000, scribeSend } = {}) {
     return () => {};
   }
   _stopRequested = false;
+  
+  // --- Pushgateway (prod) ---
+  try {
+    __keeperPgw = createPushgatewayPusher({ service: "keeper", clearOnStop: true });
+    __keeperPgw.start();
+  } catch {}
 
+  // --- Optional boot smoke to prove keeper_events_total wiring ---
+  if ((process.env.KEEPER_EMIT_BOOT_SMOKE ?? "0") === "1") {
+    try { m_keeper_events_total.inc({ hall: "system", kind: "boot_smoke" }, 1); } catch {}
+  }
+  
   // Bind HTTP probes only when we are the active instance
   if (!globalThis.__keeperHttpServerStarted) {
     try {
