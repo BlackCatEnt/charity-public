@@ -1,111 +1,111 @@
+// A:\Charity\hive\common\metrics.mjs
 import os from "node:os";
 import process from "node:process";
-import { Counter, Histogram, Registry, Pushgateway, collectDefaultMetrics } from "prom-client";
+import {
+  Counter,
+  Histogram,
+  Registry,
+  Pushgateway,
+  collectDefaultMetrics,
+} from "prom-client";
 
-// Environment (with sane defaults)
-const PGW_ENABLED = process.env.PGW_ENABLED?.toLowerCase() !== "false"; // default true
+// ----- Environment (with sane defaults)
+const PGW_ENABLED = (process.env.PGW_ENABLED ?? "true").toLowerCase() !== "false";
 const PGW_URL = process.env.PGW_URL ?? "http://127.0.0.1:9091";
 const PGW_JOB = process.env.PGW_JOB ?? "charity";
 const PGW_INSTANCE = process.env.PGW_INSTANCE ?? os.hostname();
 const PGW_INTERVAL_MS = Number(process.env.PGW_PUSH_INTERVAL_MS ?? 5000);
 
+// ----- Registry & defaults
 export const registry = new Registry();
 collectDefaultMetrics({ register: registry });
+registry.setDefaultLabels({ job: PGW_JOB, instance: PGW_INSTANCE });
 
-// Common labels across Keeper/Scribe
+// Helper (not strictly required but handy for tests)
 export function withServiceLabels(service) {
   return { job: PGW_JOB, instance: PGW_INSTANCE, service };
 }
 
-// Define counters here so both services share consistent names/help text.
+// ----- Metrics (shared by Keeper & Scribe)
 export const metrics = {
+  // No extra labelNames here so inc() works directly
   keeper_events_total: new Counter({
     name: "keeper_events_total",
     help: "Total number of events processed by Keeper.",
     registers: [registry],
-    labelNames: ["status","transport"], // 'service' via default labels
   }),
+
+  // Errors by reason
   keeper_errors_total: new Counter({
     name: "keeper_errors_total",
     help: "Keeper errors by reason.",
     registers: [registry],
-    labelNames: ["reason"], // 'service' via default labels
+    labelNames: ["reason"],
   }),
+
+  // Scribe write result errors (e.g., 'error', 'timeout')
   scribe_write_errors_total: new Counter({
     name: "scribe_write_errors_total",
     help: "Scribe write errors by result.",
     registers: [registry],
-    labelNames: ["result"], // 'service' via default labels
+    labelNames: ["result"],
   }),
+
+  // Latency histograms
   keeper_event_duration_ms: new Histogram({
     name: "keeper_event_duration_ms",
     help: "End-to-end Keeper event processing time (ms).",
     registers: [registry],
-    labelNames: [], // 'service' via default labels
-    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
+    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
   }),
+
   scribe_flush_duration_ms: new Histogram({
     name: "scribe_flush_duration_ms",
     help: "Scribe batch flush duration (ms).",
     registers: [registry],
-    labelNames: [], // 'service' via default labels
-    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
-  }),+  keeper_errors_total: new Counter({
-    name: "keeper_errors_total",
-    help: "Keeper errors by reason.",
-    registers: [registry],
-    labelNames: ["reason"], // 'service' via default labels
+    buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
   }),
-  scribe_write_errors_total: new Counter({
-    name: "scribe_write_errors_total",
-    help: "Scribe write errors by result.",
-    registers: [registry],
-    labelNames: ["result"], // 'service' via default labels
-  }),
-  keeper_event_duration_ms: new Histogram({
-    name: "keeper_event_duration_ms",
-    help: "End-to-end Keeper event processing time (ms).",
-    registers: [registry],
-    labelNames: [], // 'service' via default labels
-    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
-  }),
-  scribe_flush_duration_ms: new Histogram({
-    name: "scribe_flush_duration_ms",
-    help: "Scribe batch flush duration (ms).",
-    registers: [registry],
-    labelNames: [], // 'service' via default labels
-    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
-  }),
+
+  // Scribe batch “volume” counter; includes transport + status
   scribe_batches_total: new Counter({
     name: "scribe_batches_total",
-    help: "Total number of batches flushed by Scribe (sum of batch sizes).",
+    help: "Total number of records flushed by Scribe (sum of batch sizes).",
     registers: [registry],
-    labelNames: ["service"],
+    labelNames: ["status", "transport"],
   }),
 };
 
+// ----- Pushgateway pusher
 let pushTimer = null;
 let pgw = null;
 let pushFn = null;
 
+/**
+ * createPushgatewayPusher({ service, clearOnStop=true })
+ * start(): begin periodic pushes
+ * stop(): stop timer + final push
+ * clear(): delete series for this job (and instance/service via default labels)
+ */
 export function createPushgatewayPusher({ service, clearOnStop = true } = {}) {
   if (!PGW_ENABLED) {
     return {
       start() {},
       async stop() {},
       async clear() {},
-      labels() { return { service }; },
+      labels() {
+        return { service };
+      },
     };
   }
 
-  pgw = new Pushgateway(PGW_URL, {}, registry);
-  const labels = withServiceLabels(service);
-
-  // Prom-client Pushgateway doesn't accept arbitrary labels on push call;
-  // we set default labels on the registry via "labels" wrapper.
+  // set/override default labels to include service for this process
   registry.setDefaultLabels({ job: PGW_JOB, instance: PGW_INSTANCE, service });
+  pgw = new Pushgateway(PGW_URL, {}, registry);
 
-  pushFn = async () => pgw.pushAdd({ jobName: PGW_JOB }).catch(() => {});
+  pushFn = async () => {
+    // pushAdd preserves time series not mentioned in this batch
+    await pgw.pushAdd({ jobName: PGW_JOB });
+  };
 
   const start = () => {
     if (!pushTimer) pushTimer = setInterval(pushFn, PGW_INTERVAL_MS);
@@ -116,28 +116,37 @@ export function createPushgatewayPusher({ service, clearOnStop = true } = {}) {
       clearInterval(pushTimer);
       pushTimer = null;
     }
-    // one last push to flush any stragglers
-    try { await pushFn(); } catch {}
+    try {
+      await pushFn(); // final flush
+    } catch {
+      /* ignore */
+    }
   };
 
   const clear = async () => {
     try {
       await pgw.delete({ jobName: PGW_JOB });
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
-  // install shutdown hooks once per process
-  // (idempotent-ish; calling multiple times is harmless)
+  // Graceful shutdown hooks
   for (const sig of ["SIGINT", "SIGTERM"]) {
     process.on(sig, async () => {
       try {
         await stop();
-        if (clearOnStop) { await clear(); }
+        if (clearOnStop) await clear();
       } finally {
         process.exit(0);
       }
     });
   }
 
-  return { start, stop, clear, labels: () => labels };
+  return {
+    start,
+    stop,
+    clear,
+    labels: () => withServiceLabels(service),
+  };
 }
