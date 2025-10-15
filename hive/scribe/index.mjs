@@ -2,9 +2,14 @@
 import { makeTransport } from "./transport.mjs";
 import { withRetry } from "./backoff.mjs";
 import { counter, flush, setDefaultMetricTags } from "./metrics.mjs";
-// Scribe = producer only. Export/roll-up handled by Sentry.
-import { m_scribe_write, m_scribe_retry, m_scribe_batches_total } from '../metrics/prom.mjs';
 import { createPushgatewayPusher } from "#hive/metrics/pushgateway.mjs";
+import {
+  m_scribe_write,
+  m_scribe_retry,
+  m_scribe_batches_total,
+  m_scribe_flush_duration_ms,     // NEW
+  m_scribe_write_errors_total      // NEW
+} from '../metrics/prom.mjs';
 import os from "node:os";
 
 const SMOKE_MODE = process.env.SMOKE === 'true';
@@ -97,9 +102,13 @@ export async function sendLines(ndjsonLines) {
 });
     // count attempted size under 'error' for visibility (optional)
     m_scribe_batches_total.inc({ transport: transport.name, status: "error" }, ndjsonLines.length);
+    // NEW: error counter (result label carries the error code/fallback)
+    try { m_scribe_write_errors_total.inc({ result: String(err?.code || 'error') }, 1); } catch {}	
     throw err;
   } finally {
     counter("scribe.ms", Date.now() - start, { transport: transport.name, ...defaultTags });
+    // NEW: flush latency histogram (ms)
+    try { m_scribe_flush_duration_ms.observe(Date.now() - start, { transport: transport.name }); } catch {}	
     if (AUTOFLUSH) { try { await flush(); } catch {} }
   }
 }
@@ -134,6 +143,7 @@ export async function scribeWriteWithRetry(payload, max = 3) {
       attempt++;
       if (attempt >= max) {
         m_scribe_write.inc({ result: 'fail' }, 1);
+		try { m_scribe_write_errors_total.inc({ result: 'fail' }, 1); } catch {}
         throw e;
       }
       await new Promise(r => setTimeout(r, 10));

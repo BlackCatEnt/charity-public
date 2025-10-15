@@ -1,6 +1,6 @@
 import os from "node:os";
 import process from "node:process";
-import { Counter, Registry, Pushgateway, collectDefaultMetrics } from "prom-client";
+import { Counter, Histogram, Registry, Pushgateway, collectDefaultMetrics } from "prom-client";
 
 // Environment (with sane defaults)
 const PGW_ENABLED = process.env.PGW_ENABLED?.toLowerCase() !== "false"; // default true
@@ -23,7 +23,58 @@ export const metrics = {
     name: "keeper_events_total",
     help: "Total number of events processed by Keeper.",
     registers: [registry],
-    labelNames: ["service"],
+    labelNames: ["status","transport"], // 'service' via default labels
+  }),
+  keeper_errors_total: new Counter({
+    name: "keeper_errors_total",
+    help: "Keeper errors by reason.",
+    registers: [registry],
+    labelNames: ["reason"], // 'service' via default labels
+  }),
+  scribe_write_errors_total: new Counter({
+    name: "scribe_write_errors_total",
+    help: "Scribe write errors by result.",
+    registers: [registry],
+    labelNames: ["result"], // 'service' via default labels
+  }),
+  keeper_event_duration_ms: new Histogram({
+    name: "keeper_event_duration_ms",
+    help: "End-to-end Keeper event processing time (ms).",
+    registers: [registry],
+    labelNames: [], // 'service' via default labels
+    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
+  }),
+  scribe_flush_duration_ms: new Histogram({
+    name: "scribe_flush_duration_ms",
+    help: "Scribe batch flush duration (ms).",
+    registers: [registry],
+    labelNames: [], // 'service' via default labels
+    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
+  }),+  keeper_errors_total: new Counter({
+    name: "keeper_errors_total",
+    help: "Keeper errors by reason.",
+    registers: [registry],
+    labelNames: ["reason"], // 'service' via default labels
+  }),
+  scribe_write_errors_total: new Counter({
+    name: "scribe_write_errors_total",
+    help: "Scribe write errors by result.",
+    registers: [registry],
+    labelNames: ["result"], // 'service' via default labels
+  }),
+  keeper_event_duration_ms: new Histogram({
+    name: "keeper_event_duration_ms",
+    help: "End-to-end Keeper event processing time (ms).",
+    registers: [registry],
+    labelNames: [], // 'service' via default labels
+    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
+  }),
+  scribe_flush_duration_ms: new Histogram({
+    name: "scribe_flush_duration_ms",
+    help: "Scribe batch flush duration (ms).",
+    registers: [registry],
+    labelNames: [], // 'service' via default labels
+    buckets: [5,10,25,50,100,250,500,1000,2500,5000],
   }),
   scribe_batches_total: new Counter({
     name: "scribe_batches_total",
