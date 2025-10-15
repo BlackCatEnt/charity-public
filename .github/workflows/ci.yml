@@ -32,6 +32,17 @@ jobs:
           echo $! > keeper.pid
           # wait for first tick to process files
           sleep 2
+      - name: Wait for Keeper probe
+        run: |
+          for i in {1..30}; do
+            if curl -sSf http://127.0.0.1:8140/health | jq -e '.ok==true' >/dev/null 2>&1; then
+              echo "keeper up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "keeper did not become ready in time" >&2
+          exit 1
 
       - name: Assert Prom metrics
         env:
