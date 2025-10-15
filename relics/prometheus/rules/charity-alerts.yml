@@ -1,10 +1,12 @@
+---
 groups:
   - name: charity.sentry
     rules:
       # 1) Sentry exporter looks stale
       # Alert when the last successful 'up' sample for the charity-sentry job is older than 2 minutes.
       - alert: SentryExporterStale
-        expr: time() - max(timestamp(up{job="charity-sentry"})) > 120
+        expr: >
+          max_over_time(push_time_seconds[5m]) < time() - 120
         for: 5m
         labels:
           severity: warning

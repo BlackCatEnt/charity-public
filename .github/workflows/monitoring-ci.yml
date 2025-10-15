@@ -14,10 +14,8 @@ jobs:
       # promtool via Docker (direct entrypoint for single file)
       - name: promtool check config
         run: |
-          docker run --rm \
-            -v "$GITHUB_WORKSPACE":/work \
-            --entrypoint /bin/promtool \
-            prom/prometheus:latest \
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" \
+            --entrypoint promtool prom/prometheus:latest \
             check config /work/relics/prometheus/prometheus.yml
 
       # For rules we need a shell loop inside the container
