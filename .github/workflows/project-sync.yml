@@ -7,29 +7,28 @@ on:
 permissions:
   contents: read
   issues: write
-  projects: write
+  repository-projects: write  # <-- replace 'projects' with this
 
 jobs:
   sync:
     if: github.event.issue.pull_request == null  # ignore PRs
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      # Ensure gh CLI is present on Windows runners
+      # Windows runners usually have gh already, but this is safe & idempotent.
       - name: Install GitHub CLI (if needed)
-        run: |
-          choco install gh -y || echo "gh already present"
+        run: choco install gh -y || echo "gh already present"
 
       - name: Sync fields into project
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
+          ISSUE: ${{ github.event.issue.number }}   # <-- single env block
         run: |
           pwsh -File .\relics\sync-project-fields.ps1 `
             -Owner "BlackCatEnt" `
             -Repo "charity-hive" `
             -ProjectNumber 2 `
             -IssueNumber $env:ISSUE
-        env:
-          ISSUE: ${{ github.event.issue.number }}
