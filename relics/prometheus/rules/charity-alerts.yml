@@ -37,3 +37,26 @@ groups:
         annotations:
           summary: "Sentry target is DOWN"
           description: "Prometheus reports up=0 for job=charity-sentry for 2m."
+  - name: charity.pipeline
+    rules:
+      # Scribe poison rising
+      - alert: ScribePoisonRising
+        expr: rate(scribe_poison_total[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: scribe
+        annotations:
+          summary: "Scribe is quarantining malformed records"
+          description: "scribe_poison_total is increasing (>0 over 15m). Check relics/.queue/poison/."
+
+      # Scribe duplicates rising
+      - alert: ScribeDuplicatesRising
+        expr: rate(scribe_duplicates_total[15m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: scribe
+        annotations:
+          summary: "Scribe is dropping duplicates"
+          description: "scribe_duplicates_total is increasing (>0.1/s over 15m). Verify upstream idempotency."

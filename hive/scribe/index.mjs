@@ -1,4 +1,9 @@
 // hive/scribe/index.mjs
+import os from "node:os";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { makeTransport } from "./transport.mjs";
 import { withRetry } from "./backoff.mjs";
 import { counter, flush, setDefaultMetricTags } from "./metrics.mjs";
@@ -8,12 +13,70 @@ import {
   m_scribe_retry,
   m_scribe_batches_total,
   m_scribe_flush_duration_ms,     // NEW
-  m_scribe_write_errors_total      // NEW
+  m_scribe_write_errors_total,     // NEW
+  m_scribe_poison_total,
+  m_scribe_duplicates_total
 } from '../metrics/prom.mjs';
-import os from "node:os";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT = path.resolve(__dirname, '..', '..'); // repo root (two up from /hive/scribe)
+const RELICS_DIR = path.join(ROOT, 'relics');
+const RUNTIME_DIR = path.join(RELICS_DIR, '.runtime');
+const STATE_DIR = path.join(RELICS_DIR, '.state');
+const POISON_DIR = path.join(RELICS_DIR, '.queue', 'poison');
+fs.mkdirSync(STATE_DIR, { recursive: true });
+fs.mkdirSync(POISON_DIR, { recursive: true });
+const DEDUPE_FILE = path.join(STATE_DIR, 'scribe-dedupe.json');
 
 const SMOKE_MODE = process.env.SMOKE === 'true';
 const FAKE_FAIL_RATIO = Number(process.env.SMOKE_FAKE_FAIL_RATIO || '0'); // e.g., 0.3
+
+// ----- Dedupe store (persistent set of seen event_id)
+const dedupe = {
+  set: new Set(),
+  dirty: false,
+};
+
+async function dedupeLoad() {
+  try {
+    const raw = await fsp.readFile(DEDUPE_FILE, 'utf8');
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) dedupe.set = new Set(arr);
+  } catch {}
+}
+async function dedupeSave() {
+  if (!dedupe.dirty) return;
+  dedupe.dirty = false;
+  try {
+    const arr = Array.from(dedupe.set);
+    await fsp.writeFile(DEDUPE_FILE, JSON.stringify(arr));
+  } catch {}
+}
+// keep store bounded (simple FIFO trim)
+function dedupeRemember(id, max = Number(process.env.SCRIBE_DEDUPE_MAX || 100_000)) {
+  if (dedupe.set.has(id)) return false;
+  dedupe.set.add(id);
+  dedupe.dirty = true;
+  // opportunistic trim
+  if (dedupe.set.size > max) {
+    const toDrop = Math.floor(max * 0.1); // drop 10% oldest-ish
+    let i = 0;
+    for (const k of dedupe.set) {
+      dedupe.set.delete(k);
+      if (++i >= toDrop) break;
+    }
+    dedupe.dirty = true;
+  }
+  return true;
+}
+function dedupeSeen(id) { return dedupe.set.has(id); }
+
+// warm the store
+await dedupeLoad();
+// flush dedupe on graceful shutdown
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, async () => { try { await dedupeSave(); } finally { process.exit(0); } });
+}
 
 const defaultTags = {
   app: process.env.APP_NAME || "charity",
@@ -79,6 +142,51 @@ function toNdjsonLines(payload) {
  * Send an array of NDJSON lines using the configured transport with jittered backoff.
  * @param {string[]} ndjsonLines
  */
+async function quarantinePoison(line, reason = "parse") {
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const name = `poison-${stamp}.jsonl`;
+    const p = path.join(POISON_DIR, name);
+    await fsp.appendFile(p, line.trim() + `\n`, "utf8");
+  } catch {}
+}
+
+/**
+ * Filter lines into { good: string[], droppedDup: number, droppedPoison: number }
+ * - tries JSON.parse
+ * - if missing event_id, passes through (no dedupe)
+ * - if event_id present: drop if seen; else remember and pass
+ */
+async function siftLinesForDedupe(lines) {
+  const good = [];
+  let droppedDup = 0, droppedPoison = 0;
+  for (const line of lines) {
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      droppedPoison++;
+      m_scribe_poison_total.inc({}, 1);
+      await quarantinePoison(line, "parse");
+      continue;
+    }
+    const id = obj?.event_id;
+    if (!id) {
+      // no event_id → not deduped, just forward
+      good.push(line);
+      continue;
+    }
+    if (dedupeSeen(id)) {
+      droppedDup++;
+      m_scribe_duplicates_total.inc({}, 1);
+      continue;
+    }
+    dedupeRemember(id);
+    good.push(line);
+  }
+  return { good, droppedDup, droppedPoison };
+}
+
 export async function sendLines(ndjsonLines) {
   const start = Date.now();
   const backoffOpts = {
@@ -87,21 +195,32 @@ export async function sendLines(ndjsonLines) {
     cap: Number(process.env.SCRIBE_BACKOFF_CAP_MS || 120000),
     maxRetries: Number(process.env.SCRIBE_BACKOFF_MAX_RETRIES || 8),
   };
+    // dedupe/poison sieve
+  const { good, droppedDup, droppedPoison } = await siftLinesForDedupe(ndjsonLines);
+  if (droppedDup || droppedPoison) {
+    // ensure state flush happens eventually
+    setTimeout(() => { dedupeSave().catch(()=>{}); }, 0);
+  }
+  if (good.length === 0) {
+    // nothing left to send; still count the attempt as success for observability
+    try { m_scribe_flush_duration_ms.observe(Date.now() - start, { transport: transport.name }); } catch {}
+    return;
+  }
+
 
   try {
-    await withRetry(() => transport.send(ndjsonLines), backoffOpts);
-    counter("scribe.sent", ndjsonLines.length, { transport: transport.name, status: "ok", ...defaultTags });
-    // NEW: canonical batch counter (sum of batch size)
-    m_scribe_batches_total.inc({ transport: transport.name, status: "ok" }, ndjsonLines.length);
+    await withRetry(() => transport.send(good), backoffOpts);
+    counter("scribe.sent", good.length, { transport: transport.name, status: "ok", ...defaultTags });
+    m_scribe_batches_total.inc({ transport: transport.name, status: "ok" }, good.length);
   } catch (err) {
-    counter("scribe.drop", ndjsonLines.length, {
+    counter("scribe.drop", good.length, {
       transport: transport.name,
       status: "error",
       code: err?.code || "ERR",
       ...defaultTags,
 });
     // count attempted size under 'error' for visibility (optional)
-    m_scribe_batches_total.inc({ transport: transport.name, status: "error" }, ndjsonLines.length);
+    m_scribe_batches_total.inc({ transport: transport.name, status: "error" }, good.length);
     // NEW: error counter (result label carries the error code/fallback)
     try { m_scribe_write_errors_total.inc({ result: String(err?.code || 'error') }, 1); } catch {}	
     throw err;

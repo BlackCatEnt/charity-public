@@ -140,6 +140,18 @@ async function* listQueueFiles() {
   for (const name of files) yield path.join(QUEUE_DIR, name);
 }
 
+function ensureEventId(rec) {
+  if (rec && rec.event_id) return rec;
+  const hall = String(rec?.source || rec?.hall || "unknown");
+  const kind = String(rec?.kind || "unknown");
+  // include ts + body-ish to stabilize the hash for “same logical event”
+  const ts   = String(rec?.ts ?? "");
+  const body = JSON.stringify(rec?.body ?? rec ?? {});
+  const raw  = `${hall}|${kind}|${ts}|${body}`;
+  const event_id = crypto.createHash('sha256').update(raw).digest('hex');
+  return { ...rec, event_id };
+}
+
 async function readJsonl(filePath) {
   const raw = await fsp.readFile(filePath, 'utf8');
   const lines = raw.split(/\r?\n/).filter(Boolean);
@@ -227,7 +239,7 @@ async function processFile({ filePath, scribeSend }) {
         waited += step;
       }
       const t0 = performance.now();
-      const ok = await withRetries(() => scribeSend(rec), { tries: 5, baseMs: 100, maxMs: 1500 });
+      const ok = await withRetries(() => scribeSend(ensureEventId(rec)), { tries: 5, baseMs: 100, maxMs: 1500 });
       if (!ok) throw new Error('scribeSend returned false');
       // Count successful processing
       m_keeper_processed.inc({ hall, kind, result: 'ok' }, 1);

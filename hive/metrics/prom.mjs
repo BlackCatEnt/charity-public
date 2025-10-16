@@ -116,7 +116,15 @@ export const m_scribe_write_errors_total = registry.counter(
   'scribe_write_errors_total',
   'Scribe write errors by result.'
 );
-
+// --- New: dedupe/poison counters (Scribe)
+export const m_scribe_poison_total = registry.counter(
+  'scribe_poison_total',
+  'Number of malformed/invalid records quarantined by Scribe.'
+);
+export const m_scribe_duplicates_total = registry.counter(
+  'scribe_duplicates_total',
+  'Number of duplicate event_ids dropped by Scribe.'
+);
 // --- New: latency histograms (milliseconds) ---
 export const m_keeper_event_duration_ms = registry.histogram(
   'keeper_event_duration_ms',
