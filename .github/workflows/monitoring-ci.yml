@@ -1,0 +1,57 @@
+name: monitoring-ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  lint-prometheus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # promtool via Docker (direct entrypoint for single file)
+      - name: promtool check config
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/work \
+            --entrypoint /bin/promtool \
+            prom/prometheus:latest \
+            check config /work/relics/prometheus/prometheus.yml
+
+      # For rules we need a shell loop inside the container
+      - name: promtool check rules
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/work \
+            --entrypoint /bin/sh \
+            prom/prometheus:latest \
+            -lc '
+              set -eu
+              found=0
+              for f in /work/relics/prometheus/rules/*.yml /work/relics/prometheus/rules/*.yaml; do
+                [ -f "$f" ] || continue
+                echo "→ checking $f"
+                /bin/promtool check rules "$f"
+                found=1
+              done
+              if [ "$found" -eq 0 ]; then
+                echo "No rules files found under /work/relics/prometheus/rules – skipping."
+              fi
+            '
+
+  lint-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: sudo pip install yamllint
+      - name: Run yamllint (prom & grafana provisioning)
+        continue-on-error: true
+        run: |
+          yamllint \
+            -d "{extends: default, rules: {line-length: disable, truthy: disable, document-start: disable}}" \
+            -s \
+            relics/prometheus/**/*.yml \
+            grafana/provisioning/**/*.yaml

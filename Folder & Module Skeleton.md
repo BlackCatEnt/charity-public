@@ -3,6 +3,10 @@
 _(Auto-generated; depth = 3)_
 
 A:\Charity\
+.github\
+  workflows\
+    ci.yml
+    monitoring-ci.yml
 adapters\
   discord.mjs
   twitch.mjs
@@ -23,10 +27,34 @@ codex\
 core\
   router.mjs
 docs\
+  ALERTS.md
   ARCHITECTURE.md
+grafana\
+  csv\
+  dashboards\
+    Charity\
+  pdf\
+  plugins\
+    grafana-exploretraces-app\
+    grafana-lokiexplore-app\
+    grafana-metricsdrilldown-app\
+    grafana-pyroscope-app\
+  png\
+  provisioning\
+    dashboards\
+    datasources\
+  storage\
+    csv\
+    dashboards\
+    pdf\
+    plugins\
+    png\
+    storage\
 halls\
   audio\
     adapter.mjs
+  common\
+    recent-cache.mjs
   discord\
     adapter.mjs
   shared\
@@ -43,6 +71,8 @@ heart\
     2025-09-12_tone-casual.json
     README.md
 hive\
+  common\
+    metrics.mjs
   herald\
     index.mjs
   keeper\
@@ -52,8 +82,12 @@ hive\
     keeper.config.json
     log.mjs
     qos.mjs
+  metrics\
+    prom.mjs
+    pushgateway.mjs
   scribe\
     backoff.mjs
+    backpressure.mjs
     client.mjs
     index.mjs
     metrics.mjs
@@ -105,6 +139,7 @@ relics\
   embeddings.ollama.mjs
   generate-skeleton.ps1
   health-keeper.ps1
+  health-sentry.ps1
   helix-get-users.mjs
   helix-smoke.mjs
   helix.mjs
@@ -132,8 +167,33 @@ relics\
     Include\
     Lib\
     Scripts\
+  alertmanager\
+    alertmanager.yml
+  compose\
+    monitoring.yml
   dev\
+    keeper-8131.mjs
+    scribe-8132.mjs
     scribe-dev-server.mjs
+  health\
+    pgw-clean.ps1
+    pgw-clear-now.mjs
+  producers\
+    poke-bees.ps1
+  prometheus\
+    prometheus.yml
+    rules\
+    targets\
+  queue\
+    incoming\
+  smoke\
+    emit-keeper-file.ps1
+    keeper-prom-smoke.mjs
+    keeper-requeue-smoke.mjs
+    scribe-backpressure-smoke.mjs
+    seed-queue.mjs
+    sentry-aggregator-smoke.mjs
+    smoke-prom-assert.mjs
   vad_streamer\
     .venv311\
     .venv311.bak\
@@ -151,9 +211,14 @@ rituals\
   snapshots\
     weekly\
 sentry\
+  aggregator.mjs
   emotes.mjs
   gamewatch.mjs
-  metrics-exporter.mjs
+  index.mjs
+  sentry.targets.json
+  server.mjs
+  exporters\
+    pushgateway.mjs
   logs\
   metrics\
     rollup.mjs

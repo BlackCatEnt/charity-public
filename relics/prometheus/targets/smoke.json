@@ -1,0 +1,3 @@
+[
+  { "targets": ["host.docker.internal:18150"], "labels": {"job": "charity-sentry-smoke"} }
+]

@@ -1,0 +1,62 @@
+{
+  "uid": "charity-overview-nosentry",
+  "title": "Keeper/Scribe Overview — Push mode",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["charity","keeper","scribe","pushgateway","v0.6"],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Pushgateway",
+      "gridPos": {"x":0,"y":0,"w":12,"h":4},
+      "targets": [{"expr":"max(up{job=\"pushgateway\"})"}],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"green","value":1}] } } }
+    },
+    {
+      "type": "stat",
+      "title": "Pushgateway staleness (s)",
+      "gridPos": {"x":12,"y":0,"w":12,"h":4},
+      "targets": [{"expr":"time() - max(timestamp(up{job=\"pushgateway\"}))"}],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Keeper & Scribe — Events rate by service",
+      "gridPos": {"x":0,"y":4,"w":24,"h":8},
+      "targets": [
+        { "expr": "sum by(service) (rate(keeper_events_total[5m]))", "legendFormat":"{{service}}" },
+        { "expr": "sum by(service) (rate(scribe_batches_total[5m]))", "legendFormat":"{{service}}" }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Raw push metrics (debug)",
+      "gridPos": {"x":0,"y":12,"w":24,"h":8},
+      "options": {"showHeader": true},
+      "targets": [
+        { "expr": "keeper_events_total" },
+        { "expr": "scribe_batches_total" }
+      ]
+    },
+	{
+	  "type": "row",
+	  "title": "Debug (collapsed)",
+	  "collapsed": true,
+	  "gridPos": { "x": 0, "y": 20, "w": 24, "h": 1 },
+	  "panels": [
+		{
+		  "type": "timeseries",
+		  "title": "Warm-up / Idle-proof increase (1m)",
+		  "gridPos": { "x": 0, "y": 21, "w": 24, "h": 6 },
+		  "targets": [
+			{ "expr": "sum by(service) (increase(keeper_events_total[1m]))", "legendFormat": "keeper {{service}}" },
+			{ "expr": "sum by(service) (increase(scribe_batches_total[1m]))", "legendFormat": "scribe {{service}}" }
+		  ],
+		  "options": { "legend": { "showLegend": true } }
+		}
+	  ]
+	}
+  ]
+}

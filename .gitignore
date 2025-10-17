@@ -134,3 +134,8 @@ node_modules/
 sentry/metrics/
 *.yml text eol=lf
 *.yaml text eol=lf
+
+prometheus/data/
+grafana/storage/
+**/.DS_Store
+**/Thumbs.db

@@ -3,7 +3,8 @@ import { makeTransport } from "./transport.mjs";
 import { withRetry } from "./backoff.mjs";
 import { counter, flush, setDefaultMetricTags } from "./metrics.mjs";
 // Scribe = producer only. Export/roll-up handled by Sentry.
-import { m_scribe_write, m_scribe_retry } from '../metrics/prom.mjs';
+import { m_scribe_write, m_scribe_retry, m_scribe_batches_total } from '../metrics/prom.mjs';
+import { createPushgatewayPusher } from "#hive/metrics/pushgateway.mjs";
 import os from "node:os";
 
 const SMOKE_MODE = process.env.SMOKE === 'true';
@@ -16,6 +17,28 @@ const defaultTags = {
 };
 
 setDefaultMetricTags(defaultTags);
+
+// --- Pushgateway (prod) ---
+let __scribePgw;
+try {
+  __scribePgw = createPushgatewayPusher({ service: "scribe", clearOnStop: true });
+  __scribePgw.start();
+} catch {}
+
+import http from "node:http";
+const ADMIN_PORT = Number(process.env.SCRIBE_ADMIN_PORT ?? 8142);
+http.createServer(async (req, res) => {
+  if (req.method === "POST" && req.url === "/shutdown") {
+    try { await __scribePgw?.stop(); } catch {}
+    res.writeHead(200).end("ok");
+    process.exit(0);
+    return;
+  }
+  if (req.url === "/healthz") { res.writeHead(200).end("ok"); return; }
+  res.writeHead(404).end("not found");
+}).listen(ADMIN_PORT, "127.0.0.1", () => {
+  console.log(`[scribe] admin listening on 127.0.0.1:${ADMIN_PORT}`);
+});
 
 // Accept both "stdout" and "stdout:" to be forgiving
 function normalizeUrl(u) {
@@ -63,6 +86,8 @@ export async function sendLines(ndjsonLines) {
   try {
     await withRetry(() => transport.send(ndjsonLines), backoffOpts);
     counter("scribe.sent", ndjsonLines.length, { transport: transport.name, status: "ok", ...defaultTags });
+    // NEW: canonical batch counter (sum of batch size)
+    m_scribe_batches_total.inc({ transport: transport.name, status: "ok" }, ndjsonLines.length);
   } catch (err) {
     counter("scribe.drop", ndjsonLines.length, {
       transport: transport.name,
@@ -70,6 +95,8 @@ export async function sendLines(ndjsonLines) {
       code: err?.code || "ERR",
       ...defaultTags,
 });
+    // count attempted size under 'error' for visibility (optional)
+    m_scribe_batches_total.inc({ transport: transport.name, status: "error" }, ndjsonLines.length);
     throw err;
   } finally {
     counter("scribe.ms", Date.now() - start, { transport: transport.name, ...defaultTags });
