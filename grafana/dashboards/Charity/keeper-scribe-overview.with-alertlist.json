@@ -57,6 +57,88 @@
 		  "options": { "legend": { "showLegend": true } }
 		}
 	  ]
+	},
+	{
+	  "type": "timeseries",
+	  "title": "Keeper P95 / P99 latency (ms)",
+	  "gridPos": { "x": 0, "y": 26, "w": 12, "h": 8 },
+	  "targets": [
+		{ "expr": "histogram_quantile(0.95, sum by (le) (rate(keeper_event_duration_ms_bucket[5m])))", "legendFormat": "P95" },
+		{ "expr": "histogram_quantile(0.99, sum by (le) (rate(keeper_event_duration_ms_bucket[5m])))", "legendFormat": "P99" }
+	  ]
+	},
+	{
+	  "type": "timeseries",
+	  "title": "Scribe P95 / P99 flush (ms)",
+	  "gridPos": { "x": 12, "y": 26, "w": 12, "h": 8 },
+	  "targets": [
+		{ "expr": "histogram_quantile(0.95, sum by (le) (rate(scribe_flush_duration_ms_bucket[5m])))", "legendFormat": "P95" },
+		{ "expr": "histogram_quantile(0.99, sum by (le) (rate(scribe_flush_duration_ms_bucket[5m])))", "legendFormat": "P99" }
+	  ]
+	},
+	{
+	  "type": "timeseries",
+	  "title": "Error rate (by reason/result)",
+	  "gridPos": { "x": 0, "y": 34, "w": 24, "h": 8 },
+	  "targets": [
+		{ "expr": "sum by (reason) (rate(keeper_errors_total[5m]))", "legendFormat": "keeper {{reason}}" },
+		{ "expr": "sum by (result) (rate(scribe_write_errors_total[5m]))", "legendFormat": "scribe {{result}}" }
+	  ],
+	  "options": { "legend": { "showLegend": true } }
+	},
+	{
+	  "type": "stat",
+	  "title": "Scribe duplicates (15m increase)",
+	  "gridPos": { "x": 0, "y": 42, "w": 12, "h": 6 },
+	  "targets": [
+		{ "expr": "sum(increase(scribe_duplicates_total[15m]))" }
+	  ],
+	  "options": {
+		"reduceOptions": { "calcs": ["lastNotNull"] },
+		"graphMode": "area",
+		"showPercentChange": false,
+		"textMode": "auto"
+	  },
+	  "fieldConfig": {
+		"defaults": {
+		  "unit": "none",
+		  "thresholds": {
+			"mode": "absolute",
+			"steps": [
+			  { "color": "green" },
+			  { "color": "red", "value": 0.001 }
+			]
+		  }
+		},
+		"overrides": []
+	  }
+	},
+	{
+	  "type": "stat",
+	  "title": "Scribe poison (15m increase)",
+	  "gridPos": { "x": 12, "y": 42, "w": 12, "h": 6 },
+	  "targets": [
+		{ "expr": "sum(increase(scribe_poison_total[15m]))" }
+	  ],
+	  "options": {
+		"reduceOptions": { "calcs": ["lastNotNull"] },
+		"graphMode": "area",
+		"showPercentChange": false,
+		"textMode": "auto"
+	  },
+	  "fieldConfig": {
+		"defaults": {
+		  "unit": "none",
+		  "thresholds": {
+			"mode": "absolute",
+			"steps": [
+			  { "color": "green" },
+			  { "color": "red", "value": 0.001 }
+			]
+		  }
+		},
+		"overrides": []
+	  }
 	}
   ]
 }

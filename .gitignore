@@ -139,3 +139,8 @@ prometheus/data/
 grafana/storage/
 **/.DS_Store
 **/Thumbs.db
+
+relics/.queue/
+relics/.state/
+relics/.runtime/
+relics/.cache/
