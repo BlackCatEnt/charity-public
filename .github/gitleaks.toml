@@ -1,0 +1,20 @@
+title = "Charity-Hive gitleaks policy"
+
+[extend]
+# keep default rules and add allowlist below
+useDefault = true
+
+[allowlist]
+# ignore entire generated/loggy trees
+paths = [
+  '''^soul/cache/''',
+  '''^soul/memory/''',
+]
+
+# allow known-safe ID formats (NOT secrets)
+regexes = [
+  # discord snowflakes (numeric IDs, not tokens)
+  '''\b\d{17,20}\b''',
+  # localhost URLs
+  '''https?://(127\.0\.0\.1|localhost)(:\d+)?(/[^\s"]*)?''',
+]
