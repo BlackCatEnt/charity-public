@@ -72,9 +72,10 @@ function defaultLLM()     {
 }
 
 function isAddressed(evt, text='') {
-  const t = (text || '').toLowerCase().trim();
+  const t = (text || '').toLowerCase();
   const nameHits = /\bcharity\b/.test(t);
-  const cmd = /^[!.]/.test(t); // commands like !ask, !kb …
+  // treat as a command ONLY if the first non-whitespace char is '!'
+  const cmd = /^\s*!/.test(t);
   const replyHit = !!evt.meta?.replyToMe;
   const mentionHit = !!evt.meta?.mentionedMe;
   return nameHits || cmd || replyHit || mentionHit || !!evt.meta?.isDM;
@@ -113,7 +114,9 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
-      const text = evt.text?.trim() || '';
+      const text = (evt.text ?? '');
+      // Ignore posts that are only ellipses/punctuation/whitespace (covers ".....", "……", lines of dashes, etc.)
+      if (!/[A-Za-z0-9\u00A9-\u1FFF\u2C00-\uD7FF\u{1F300}-\u{1FAFF}]/u.test(text)) return;
 	  
 	  function classifyIntent(t) {
 		  const s = (t || '').toLowerCase();
@@ -143,7 +146,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 			reason: _conv.isDM ? 'dm' :
 					_conv.isReply ? 'reply' :
 					_conv.mentioned ? 'mention' :
-					(/^[!.]/.test(text) ? 'command' : 'open')
+					( /^\s*!/.test(text) ? 'command' : 'open')
 		  }
 		});
 
@@ -248,7 +251,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
 	  // Feed conversational event wizard if active
-	  if (hasWizard(evt) && !/^[!.]/.test(text)) {
+	  if (hasWizard(evt) && !/^\s*!/.test(text)) {
 	    const step = await stepWizard(evt, text);
 	    if (step.prompt) await emit(step.prompt);
 	    return;

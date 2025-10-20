@@ -5,9 +5,9 @@
 
 import http from 'node:http';
 import fs from 'node:fs';
+import fsp from 'fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import fsp from 'fs/promises';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,9 +17,18 @@ import Scribe from '../scribe/index.mjs';
 import { metricsIngest, startMetrics } from "#sentry/metrics/rollup.mjs";
 import { TokenBucket } from "./qos.mjs";
 import { scribeWriteWithRetry } from "#hive/scribe/index.mjs";
-import { registry, m_keeper_processed, m_keeper_qdepth, m_hall_dedup_drop } from '../metrics/prom.mjs';
+import { createPushgatewayPusher } from "#hive/metrics/pushgateway.mjs";
 import { m_scribe_write, m_scribe_retry } from "#hive/metrics/prom.mjs";
-
+import {
+   registry,
+   m_keeper_processed,
+   m_keeper_qdepth,
+   m_hall_dedup_drop,
+   m_keeper_events_total,
+   m_keeper_event_duration_ms,   // NEW
+   m_keeper_errors_total         // NEW
+} from '../metrics/prom.mjs';
+let __keeperPgw; // hold pusher for shutdown
 startMetrics();
 
 
@@ -85,8 +94,9 @@ function exclusiveLock() {
     fs.writeFileSync(fd, payload);
     fs.closeSync(fd);
     const release = () => { try { if (_isOwnerOfLock) fs.unlinkSync(LOCK_FILE); } catch {} _isOwnerOfLock = false; };
-    const shutdown = () => {
+    const shutdown = async () => {
       _stopRequested = true;
+      try { await __keeperPgw?.stop(); } catch {}
       try { globalThis.__keeperHttpServer?.close(); } catch {}
       release();
       process.exit(0);
@@ -216,10 +226,15 @@ async function processFile({ filePath, scribeSend }) {
         await delay(step);
         waited += step;
       }
+      const t0 = performance.now();
       const ok = await withRetries(() => scribeSend(rec), { tries: 5, baseMs: 100, maxMs: 1500 });
       if (!ok) throw new Error('scribeSend returned false');
       // Count successful processing
       m_keeper_processed.inc({ hall, kind, result: 'ok' }, 1);
+      // NEW: canonical total counter (post-success)
+      m_keeper_events_total.inc({ hall, kind }, 1);
+      // NEW: latency histogram (ms) per successful record
+      try { m_keeper_event_duration_ms.observe(performance.now() - t0, { hall, kind }); } catch {}	  
     }
     await markHashProcessed(hash);
     const finalName = `${path.basename(filePath)}`;
@@ -232,39 +247,45 @@ async function processFile({ filePath, scribeSend }) {
     try { await fsp.rename(tmpPath, path.join(FAILED_DIR, finalName)); } catch {}
     _counters.failed++;
 
-    // If we errored mid-file, requeue the remainder so we don't lose work
-    try {
-      if (i >= 0 && Array.isArray(records)) {
-        // Requeue from the failed record 'i' onward (includes the failed one)
-        const remainder = records.slice(i);
-        if (remainder.length > 0) {
-          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const requeueName = `requeue-${finalName.replace(/\.jsonl$/,'')}-${stamp}.jsonl`;
-          const requeuePath = path.join(QUEUE_DIR, requeueName);
-          const payload = remainder.map(r => JSON.stringify(r)).join('\n') + '\n';
-          await fsp.writeFile(requeuePath, payload, 'utf8');
-          console.log(`metric=keeper_requeued_records value=${remainder.length} requeue=${JSON.stringify(requeueName)} from=${JSON.stringify(finalName)} failed_index=${i}`);
-          keeperLog({ type: "keeper.partial_fail", file: finalName, requeued: requeueName, count: remainder.length, failed_index: i, error: String(e?.message || e) });
-      status = 'failed';
-      // Count as keeper error for the last seen record if available
+    // small helpers for readability
+    const emitErrorMetrics = () => {
       try {
-        const rec = (Array.isArray(records) && i >= 0) ? records[i] : null;
+        const rec  = (Array.isArray(records) && i >= 0) ? records[i] : null;
         const hall = String(rec?.source || "unknown");
-        const kind = String(rec?.kind || "unknown");
-        m_keeper_processed.inc({ hall, kind, result: 'error' }, 1);
+        const kind = String(rec?.kind   || "unknown");
+        m_keeper_processed.inc({ hall, kind, result: "error" }, 1);
+        m_keeper_errors_total.inc({ reason: String(e?.code || "send"), hall, kind }, 1);
       } catch {}
-          return status; // done — do NOT DLQ the whole file
-        }
-      }
-    } catch {}
+    };
+    const requeueRemainder = async () => {
+      if (!(i >= 0 && Array.isArray(records))) return false;
+      const remainder = records.slice(i);
+      if (remainder.length === 0) return false;
+      const stamp       = new Date().toISOString().replace(/[:.]/g, "-");
+      const requeueName = `requeue-${finalName.replace(/\.jsonl$/,"")}-${stamp}.jsonl`;
+      const requeuePath = path.join(QUEUE_DIR, requeueName);
+      const payload     = remainder.map(r => JSON.stringify(r)).join("\n") + "\n";
+      await fsp.writeFile(requeuePath, payload, "utf8");
+      console.log(`metric=keeper_requeued_records value=${remainder.length} requeue=${JSON.stringify(requeueName)} from=${JSON.stringify(finalName)} failed_index=${i}`);
+      keeperLog({ type: "keeper.partial_fail", file: finalName, requeued: requeueName, count: remainder.length, failed_index: i, error: String(e?.message || e) });
+      return true;
+    };
 
-    // Hard failure (no remainder): mirror to DLQ for visibility
+    // 1) try to requeue what we didn't process
+    let requeued = false;
+    try {
+      requeued = await requeueRemainder();
+    } catch {/* non-fatal */}
+    emitErrorMetrics();
+    status = "failed";
+    if (requeued) return status;  // partial failure handled — do NOT DLQ whole file
+
+    // 2) full failure: copy to DLQ for visibility
     try {
       await fsp.copyFile(path.join(FAILED_DIR, finalName), path.join(DLQ_DIR, finalName));
       keeperLog({ type: "dlq.record", reason: String(e?.message || e), file: finalName });
     } catch {}
     console.log(`metric=keeper_failed_files value=1 file=${JSON.stringify(finalName)} error=${JSON.stringify(String(e?.message || e))}`);
-    status = 'failed';
   } finally {
     try { await fsp.unlink(hashSidecar); } catch {}
   }
@@ -311,7 +332,8 @@ export async function processQueueOnce(opts = {}) {
       if (status) handled++;
     } catch (e) {
       console.log(`metric=keeper_internal_errors value=1 file=${JSON.stringify(path.basename(filePath))} error=${JSON.stringify(String(e?.message || e))}`);
-    }
+	  try { m_keeper_errors_total.inc({ reason: 'internal' }, 1); } catch {}
+	}
   }
   return handled;
 }
@@ -329,6 +351,14 @@ function startHttpServer() {
       // keep the gauge fresh
       m_keeper_qdepth.set({ queue: 'ingest' }, queueDepth);
 	  
+      if (req.method === 'POST' && req.url === '/shutdown') {
+        // graceful stop that clears PGW even when no OS signal is delivered
+        try { await __keeperPgw?.stop(); } catch {}
+        try { if (_isOwnerOfLock) { fs.unlinkSync(LOCK_FILE); _isOwnerOfLock = false; } } catch {}
+        res.writeHead(200).end("ok");
+        process.exit(0);
+        return;
+      }
       if (req.url === '/metrics') {
         const body = registry.toText();
         res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
@@ -385,7 +415,18 @@ export function start({ intervalMs = 2000, scribeSend } = {}) {
     return () => {};
   }
   _stopRequested = false;
+  
+  // --- Pushgateway (prod) ---
+  try {
+    __keeperPgw = createPushgatewayPusher({ service: "keeper", clearOnStop: true });
+    __keeperPgw.start();
+  } catch {}
 
+  // --- Optional boot smoke to prove keeper_events_total wiring ---
+  if ((process.env.KEEPER_EMIT_BOOT_SMOKE ?? "0") === "1") {
+    try { m_keeper_events_total.inc({ hall: "system", kind: "boot_smoke" }, 1); } catch {}
+  }
+  
   // Bind HTTP probes only when we are the active instance
   if (!globalThis.__keeperHttpServerStarted) {
     try {

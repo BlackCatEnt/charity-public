@@ -1,0 +1,16 @@
+---
+groups:
+- name: charity-pgw-alerts
+  rules:
+  - alert: PushgatewayStaleSamples
+    # If the most recent push time is >120s behind 'now'
+    expr: max_over_time(push_time_seconds[5m]) < time() - 120
+    for: 2m
+    labels:
+      severity: warning
+      team: charity
+    annotations:
+      summary: "Pushgateway samples are stale"
+      description: |
+        No fresh pushes within the last 2 minutes.
+        Check Keeper/Scribe push loops, or network to PGW.

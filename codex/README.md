@@ -216,3 +216,14 @@ If you want easy start/stop for dev producers, you already added the `.mjs` file
     "smoke:sentry": "node ./relics/smoke/sentry-aggregator-smoke.mjs"
   }
 }
+## v0.5.0 — Monitoring patch
+- New: Prometheus + Alertmanager + Grafana stack with provisioning
+- New: Sentry exporter alerts (staleness/scrape errors/target down)
+- New: Keeper/Scribe Overview dashboard with Alertmanager panel
+- Ops: `.env.example` introduced; real `.env` is gitignored
+- Note: Using latest Grafana for UI improvements; pin if regressions appear
+If latest images regress:
+grafana/grafana:10.4.5
+prom/prometheus:v3.6.0
+prom/alertmanager:v0.27.0
+prom/pushgateway:v1.8.0
