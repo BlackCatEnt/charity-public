@@ -102,17 +102,15 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
   const _llm    = llm    ?? defaultLLM();
   // Module-local (above return) or closure-local near the top of createRouter:
   let lastPlannedAt = 0;
+  let participantsCtx; // optional context populated later
   const plannerCooldownMs = Number(process.env.PLANNER_COOLDOWN_MS || 45000);
-  const eligibleToPlan = (Date.now() - lastPlannedAt) > plannerCooldownMs;
+  // compute at use-time, not once at load-time
+  const eligibleToPlan = () => (Date.now() - lastPlannedAt) > plannerCooldownMs;
 
   return {
     async handle(evt, io) {
 	  if (seenRecently(evt)) return; // already handled this message
       // record the user's message first (so recall includes it)
-	  if (typeof memory?.noteUser === 'function') {
-	    await memory.noteUser(evt);
-      }
-	  // record user message (existing)
 	  if (typeof memory?.noteUser === 'function') await memory.noteUser(evt);
 	  // index user message into vector memory (best effort)
 	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'user', text: evt.text }).catch(()=>{}); }
@@ -464,12 +462,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	   /* participantsCtx if any */, ...styleHints, ...vCtx, ...ragCtx,
 	   ...capsCtx
 	 ];
-	  const roleHints = guards.isGuildMaster(evt)
-	  ? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (BagOTrix). Address respectfully as “Guild Master” when appropriate.' }]
-	  : [];
-
-	  const ctx = [...roleHints, ...memoryCtx, ...vCtx, ...ragCtx];
-	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+      if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 
 	  // !whoami (use the ctx, then return early)
 	  if (/^!whoami\b/i.test(text)) {
@@ -482,16 +475,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		await emit(out, (r?.meta || {}));
 		return;
       }
-      const reply = await _llm.compose({ evt, ctx, persona, cfg });
-
-      const out = (reply?.text ?? '').trim();
-      if (!out) return; // nothing to say
-	  if (typeof memory?.noteAssistant === 'function') await memory.noteAssistant(evt, out);
-	  // index assistant message too (best effort)
-	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'assistant', text: out }).catch(()=>{}); }
-
-      await delayFor(out);
-	  await io.send(evt.roomId, out, { hall: evt.hall, ...(reply?.meta || {}) });
 
 	  if (typeof memory?.noteAssistant === 'function') {
 	  await memory.noteAssistant(evt, out);
@@ -540,7 +523,7 @@ if (wantReason) {
   });
 
   const plan = (reply?.text || '').match(/^PLAN:\s*([a-z0-9_.-]+)(?:\s+(.*))?/i);
-  if (plan && eligibleToPlan) {
+  if (plan && eligibleToPlan()) {
     lastPlannedAt = Date.now();
     const capId = plan[1], args = plan[2] || '';
     const cap = CAPABILITIES.find(c => c.id === capId);
