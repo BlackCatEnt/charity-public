@@ -144,3 +144,7 @@ relics/.queue/
 relics/.state/
 relics/.runtime/
 relics/.cache/
+
+gitleaks.sarif
+results.sarif
+.github/gitleaks-baseline.sarif

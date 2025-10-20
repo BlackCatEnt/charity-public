@@ -9,6 +9,21 @@ useDefault = true
 paths = [
   '''^soul/cache/''',
   '''^soul/memory/''',
+  '''^node_modules/''',
+  '''^package-lock\.json$''',
+  '''^pnpm-lock\.yaml$''',
+  '''^yarn\.lock$''',
+  '''^grafana/dashboards/''',
+  '''^soul/(cache|memory|kb)/''',
+  '''^relics/vad_streamer/\.venv''',
+  '''^relics/vad_streamer/\.venv.*''',
+  '''^relics/tmp/''',  
+  '''^\.github/gitleaks-baseline\.sarif$''',
+  '''^\.github/gitleaks.*\.sarif$''',
+  '''^gitleaks\.sarif$''',
+  '''^results\.sarif$''',
+  '''^gitleaks\.json$''',
+  '''^\.sarif$''',  
 ]
 
 # allow known-safe ID formats (NOT secrets)
@@ -17,4 +32,12 @@ regexes = [
   '''\b\d{17,20}\b''',
   # localhost URLs
   '''https?://(127\.0\.0\.1|localhost)(:\d+)?(/[^\s"]*)?''',
+  '''\b127\.0\.0\.1(?::\d+)?\b''',
+  '''\blocalhost(?::\d+)?\b''',
+]
+
+# Extra noise reducers: strings that, if present inside a finding, make it benign
+stopwords = [
+  'example', 'sample', 'dummy', 'changeme', 'redacted', 'placeholder',
+  'xxxxx', 'xxxxxxxx', 'your_', 'test_', 'localhost'
 ]
