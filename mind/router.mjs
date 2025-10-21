@@ -476,8 +476,8 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		return;
       }
 
-	  if (typeof memory?.noteAssistant === 'function') {
-	  await memory.noteAssistant(evt, out);
+	    await emit(`Synced ${tw.length} Twitch and ${dd.length} Discord emotes. ✧`);
+	    return;
 	  }
  
 	  if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
