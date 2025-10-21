@@ -1,0 +1,8 @@
+---
+groups:
+- name: charity-push-rules
+  rules:
+  - record: job_service:keeper_events_rate5m
+    expr: sum by (service) (rate(keeper_events_total[5m]))
+  - record: job_service:scribe_batches_rate5m
+    expr: sum by (service) (rate(scribe_batches_total[5m]))

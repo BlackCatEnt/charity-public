@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Working Agreement
+    url: https://github.com/BlackCatEnt/charity-hive/blob/main/codex/WORKING_AGREEMENT.md
+    about: Read our one-pager before creating issues

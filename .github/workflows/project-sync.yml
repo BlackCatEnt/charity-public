@@ -1,0 +1,34 @@
+name: Project field sync (Story issues)
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+  repository-projects: write  # <-- replace 'projects' with this
+
+jobs:
+  sync:
+    if: github.event.issue.pull_request == null  # ignore PRs
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Windows runners usually have gh already, but this is safe & idempotent.
+      - name: Install GitHub CLI (if needed)
+        run: choco install gh -y || echo "gh already present"
+
+      - name: Sync fields into project
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE: ${{ github.event.issue.number }}   # <-- single env block
+        run: |
+          pwsh -File .\relics\sync-project-fields.ps1 `
+            -Owner "BlackCatEnt" `
+            -Repo "charity-hive" `
+            -ProjectNumber 2 `
+            -IssueNumber $env:ISSUE

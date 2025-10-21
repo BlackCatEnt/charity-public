@@ -1,0 +1,9 @@
+route:
+  receiver: default
+receivers:
+  - name: default
+    # add real integrations when ready; examples:
+    # slack_configs:
+    #   - api_url: https://hooks.slack.com/services/XXX/YYY/ZZZ
+    #     channel: '#charity-alerts'
+

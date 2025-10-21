@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Scrape Pushgateway (this is where Keeper/Scribe push counters live)
+  - job_name: pushgateway
+    static_configs:
+      - targets: ['pushgateway:9091']
+    honor_labels: true   # keep the job/instance/service labels pushed by our apps
+
+  # Optional: scrape Sentry so you can watch its "up" and any Sentry-native metrics.
+  # Sentry itself does NOT contain Keeper/Scribe counters in your current setup.
+  - job_name: charity-sentry
+    static_configs:
+      - targets: ['host.docker.internal:8150']
+
+  # (Optional) Leave the smoke job only if you actually run it; otherwise remove it.
+  # - job_name: charity-sentry-smoke
+  #   static_configs:
+  #     - targets: ['host.docker.internal:18150']

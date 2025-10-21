@@ -71,10 +71,12 @@ function defaultLLM()     {
   };
 }
 
+
 function isAddressed(evt, text='') {
-  const t = (text || '').toLowerCase().trim();
+  const t = (text || '').toLowerCase();
   const nameHits = /\bcharity\b/.test(t);
-  const cmd = /^[!.]/.test(t); // commands like !ask, !kb …
+  // treat as a command ONLY if the first non-whitespace char is '!'
+  const cmd = /^\s*!/.test(t);
   const replyHit = !!evt.meta?.replyToMe;
   const mentionHit = !!evt.meta?.mentionedMe;
   return nameHits || cmd || replyHit || mentionHit || !!evt.meta?.isDM;
@@ -100,20 +102,24 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
   const _llm    = llm    ?? defaultLLM();
   // Module-local (above return) or closure-local near the top of createRouter:
   let lastPlannedAt = 0;
+  let participantsCtx; // optional context populated later
   const plannerCooldownMs = Number(process.env.PLANNER_COOLDOWN_MS || 45000);
-  const eligibleToPlan = (Date.now() - lastPlannedAt) > plannerCooldownMs;
+  // compute at use-time, not once at load-time
+  const eligibleToPlan = () => (Date.now() - lastPlannedAt) > plannerCooldownMs;
 
   return {
     async handle(evt, io) {
 	  if (seenRecently(evt)) return; // already handled this message
-	  // record user message (existing)
+      // record the user's message first (so recall includes it)
 	  if (typeof memory?.noteUser === 'function') await memory.noteUser(evt);
 	  // index user message into vector memory (best effort)
 	  if (vmem?.indexTurn) { vmem.indexTurn({ evt, role: 'user', text: evt.text }).catch(()=>{}); }
 
 	  // ===== Training / Observer quick commands (curators only) =====
       const isCurator = guards.isCurator(evt);
-      const text = evt.text?.trim() || '';
+      const text = (evt.text ?? '');
+      // Ignore posts that are only ellipses/punctuation/whitespace (covers ".....", "……", lines of dashes, etc.)
+      if (!/[A-Za-z0-9\u00A9-\u1FFF\u2C00-\uD7FF\u{1F300}-\u{1FAFF}]/u.test(text)) return;
 	  
 	  function classifyIntent(t) {
 		  const s = (t || '').toLowerCase();
@@ -143,7 +149,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 			reason: _conv.isDM ? 'dm' :
 					_conv.isReply ? 'reply' :
 					_conv.mentioned ? 'mention' :
-					(/^[!.]/.test(text) ? 'command' : 'open')
+					( /^\s*!/.test(text) ? 'command' : 'open')
 		  }
 		});
 
@@ -248,7 +254,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // Observer: ignore unless addressed or it's a privileged command
 	  if (guards.observer && !isAddressed(evt, text)) return;
 	  // Feed conversational event wizard if active
-	  if (hasWizard(evt) && !/^[!.]/.test(text)) {
+	  if (hasWizard(evt) && !/^\s*!/.test(text)) {
 	    const step = await stepWizard(evt, text);
 	    if (step.prompt) await emit(step.prompt);
 	    return;
@@ -397,7 +403,6 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	  // NEW: vector recall (semantic memory)
 	  const qText = text.startsWith('!ask') ? text.replace(/^!ask\s*/i, '').trim() : text;
 	  const vCtx  = vmem?.recallSimilar ? await vmem.recallSimilar({ evt, queryText: qText, k: 3, days: Number(process.env.MEMORY_VECTOR_DAYS || 30) }) : [];
-
 	  const roleHints = isGuildmaster(evt)
 		? [{ title: 'Sender role', text: 'The current speaker is the Guildmaster (Bagotrix). Address respectfully as “Guild Master”, never express uncertainty about their identity.' }]
 	    : [];
@@ -457,8 +462,7 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 	   /* participantsCtx if any */, ...styleHints, ...vCtx, ...ragCtx,
 	   ...capsCtx
 	 ];
-
-	  if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
+      if (ctx?.length) console.log('[rag] ctx:', ctx.map(c => c.title));
 
 	  // !whoami (use the ctx, then return early)
 	  if (/^!whoami\b/i.test(text)) {
@@ -470,6 +474,10 @@ export function createRouter({ memory, rag, llm, safety, persona, cfg, vmem } = 
 		const out = (r?.text ?? '').trim() || "I’m Charity, your guild guide and companion. ✧";
 		await emit(out, (r?.meta || {}));
 		return;
+      }
+
+	    await emit(`Synced ${tw.length} Twitch and ${dd.length} Discord emotes. ✧`);
+	    return;
 	  }
  
 	  if (/^!spoilers\s+(on|off)\b/i.test(text) && guards.canObserver(evt)) {
@@ -515,7 +523,7 @@ if (wantReason) {
   });
 
   const plan = (reply?.text || '').match(/^PLAN:\s*([a-z0-9_.-]+)(?:\s+(.*))?/i);
-  if (plan && eligibleToPlan) {
+  if (plan && eligibleToPlan()) {
     lastPlannedAt = Date.now();
     const capId = plan[1], args = plan[2] || '';
     const cap = CAPABILITIES.find(c => c.id === capId);

@@ -1,4 +1,9 @@
 // sentry/metrics/rollup.mjs
+// Sentry owns roll-up/export of metrics emitted by producers.
+// Options you can implement here (now or later):
+// 1) Scrape producers' /metrics and re-expose a combined /metrics.
+// 2) Transform to OTLP / pushgateway / remote-write.
+
 import fs from "node:fs";
 import path from "node:path";
 
@@ -46,4 +51,9 @@ export function stopMetrics() {
   if (!timer) return;
   clearInterval(timer);
   timer = null;
+}
+
+export async function scrapeAndExport() {
+  // placeholder: fetch from http://127.0.0.1:8140/metrics (Keeper), others too
+  // combine/transform, then expose or forward.
 }

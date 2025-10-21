@@ -1,0 +1,12 @@
+{
+  "guildmaster": {
+    "name": "Bagotrix",
+    "aliases": ["bagotrix", "bag o' trix", "bag o trix"],
+    "discord": { "id": "129272147758546944" },
+    "twitch":  { "id": "93777590" }
+  },
+  "moderators": {
+    "discord": ["217779892404617216", "<DISCORD_USER_ID_2>"],
+    "twitch":  ["120443256", "<TWITCH_USER_ID_2>"]
+  }
+}

@@ -134,3 +134,17 @@ node_modules/
 sentry/metrics/
 *.yml text eol=lf
 *.yaml text eol=lf
+
+prometheus/data/
+grafana/storage/
+**/.DS_Store
+**/Thumbs.db
+
+relics/.queue/
+relics/.state/
+relics/.runtime/
+relics/.cache/
+
+gitleaks.sarif
+results.sarif
+.github/gitleaks-baseline.sarif
