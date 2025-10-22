@@ -1,0 +1,37 @@
+---
+groups:
+- name: charity-slo
+  rules:
+  # Error rate (5m)
+  - alert: KeeperErrorRateHigh
+    expr: rate(keeper_errors_total[5m]) > 0
+    for: 2m
+    labels: { severity: warning, team: charity }
+    annotations:
+      summary: "Keeper errors > 0 over 5m"
+      description: "Investigate reasons: {{ $labels.reason }}"
+
+  - alert: ScribeWriteErrors
+    expr: rate(scribe_write_errors_total[5m]) > 0
+    for: 2m
+    labels: { severity: warning, team: charity }
+    annotations:
+      summary: "Scribe write errors over 5m"
+      description: "Result: {{ $labels.result }}"
+
+  # Latency P95 thresholds (adjust to taste)
+  - alert: KeeperP95LatencyHigh
+    expr: histogram_quantile(0.95, sum by (le) (rate(keeper_event_duration_ms_bucket[5m]))) > 500
+    for: 5m
+    labels: { severity: warning, team: charity }
+    annotations:
+      summary: "Keeper P95 > 500ms (5m)"
+      description: "Investigate slow paths."
+
+  - alert: ScribeP95LatencyHigh
+    expr: histogram_quantile(0.95, sum by (le) (rate(scribe_flush_duration_ms_bucket[5m]))) > 500
+    for: 5m
+    labels: { severity: warning, team: charity }
+    annotations:
+      summary: "Scribe P95 > 500ms (5m)"
+      description: "Flushes are slow."

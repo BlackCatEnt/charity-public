@@ -1,0 +1,65 @@
+name: Auto label by Area (Story issues)
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  label:
+    if: github.event.issue.pull_request == null  # ignore PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply component label from Issue Form "Area"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+
+            // Find the Issue Forms "Area" answer (supports both labels we used)
+            const m = body.match(/^\*\*Area(?: \(component\))?\*\*\s*\r?\n([^\r\n]+)/m);
+            const area = m ? m[1].trim() : null;
+            core.info(`Parsed Area: ${area}`);
+
+            if (!area) return;
+
+            // Map Area option -> label name in repo
+            const map = {
+              'Keeper':  'keeper',
+              'Scribe':  'scribe',
+              'Sentry':  'sentry',
+              'BusyBee': 'busybee',
+              'Kodex':   'kodex',
+              'OBS':     'obs'
+            };
+            const target = map[area];
+            if (!target) {
+              core.info(`No label mapping for Area "${area}".`);
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const issue_number = context.payload.issue.number;
+
+            // Remove any other component labels to keep exactly one
+            const { data: current } = await github.rest.issues.listLabelsOnIssue({
+              owner, repo, issue_number, per_page: 100
+            });
+            const componentSet = new Set(['keeper','scribe','sentry','busybee','kodex','obs']);
+            for (const lab of current) {
+              if (componentSet.has(lab.name) && lab.name !== target) {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: lab.name }).catch(()=>{});
+              }
+            }
+
+            // Ensure the target label is present
+            const hasTarget = current.some(l => l.name === target);
+            if (!hasTarget) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [target] });
+            }
+
+            core.info(`Area "${area}" → label "${target}" applied.`);

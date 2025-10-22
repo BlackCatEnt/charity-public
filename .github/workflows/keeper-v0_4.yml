@@ -1,0 +1,31 @@
+name: keeper-v0.4
+
+on:
+  pull_request:
+    paths:
+      - 'hive/keeper/**'
+      - 'hive/scribe/**'
+      - 'relics/smoke/**'
+      - 'relics/prometheus/**'
+      - '.github/workflows/keeper-v0_4.yml'
+
+jobs:
+  smokes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Keeper QoS smoke
+        run: |
+          node relics/smoke/keeper-qos-smoke.mjs
+      - name: Start Pushgateway
+        run: |
+          docker run -d --name pg -p 9091:9091 prom/pushgateway:latest
+      - name: Walking skeleton push
+        env:
+          PUSHGATEWAY_URL: http://localhost:9091
+        run: |
+          node relics/smoke/walking-skeleton.mjs
+      - name: Dump PG metrics (debug)
+        run: curl -s http://localhost:9091/metrics | head -n 80

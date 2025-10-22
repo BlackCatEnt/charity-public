@@ -139,3 +139,27 @@ prometheus/data/
 grafana/storage/
 **/.DS_Store
 **/Thumbs.db
+
+relics/.queue/
+relics/.state/
+relics/.runtime/
+relics/.cache/
+
+gitleaks.sarif
+results.sarif
+.github/gitleaks-baseline.sarif
+
+# --- CI / scanner artifacts
+.github/gitleaks-baseline.sarif
+*.sarif
+
+# --- Runtime state
+relics/.state/
+soul/memory/
+
+# --- Grafana runtime (keep provisioning out of this ignore)
+grafana/*
+!grafana/provisioning/
+!grafana/provisioning/**
+
+# If you later want to version dashboards, drop the wildcard ignore and commit files under grafana/provisioning/.

@@ -89,3 +89,16 @@ Target `node relics/run-keeper.mjs` for ONLOGON and ONSTART.
 - name: Smoke: Hive Keeper
 run: node relics/smoke-keeper.mjs
 */
+
+## Keeper v0.4 QoS & E2E loop
+
+- Keeper tasks are wrapped by `withQoS(...)` for rate limiting, retries, and circuit breaking.
+- Environment knobs (defaults):
+  - `KEEPER_RPS` (20), `KEEPER_BURST` (40), `KEEPER_CONCURRENCY` (4)
+  - `KEEPER_MAX_RETRIES` (3)
+  - Backoff: `KEEPER_BACKOFF_MS` (120), `KEEPER_BACKOFF_FACTOR` (2), `KEEPER_BACKOFF_MAX_MS` (3000), `KEEPER_JITTER_PCT` (0.25)
+  - Circuit: `KEEPER_CIRCUIT_THRESHOLD` (8), `KEEPER_CIRCUIT_COOLDOWN_S` (30)
+- Metrics pushed via Scribe + Pushgateway:
+  - Counters: `keeper_attempt_total`, `keeper_success_total`, `keeper_failure_total`, `keeper_retry_total`, `keeper_throttled_total`, `keeper_skipped_circuit_total`
+  - Gauge: `keeper_qos_circuit_state` (0=closed, 1=half-open, 2=open)
+- CI walking skeleton proves producer → Pushgateway → Prometheus → Grafana dashboards (`relics/grafana/dash-keeper-qos.json`).

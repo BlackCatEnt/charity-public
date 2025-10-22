@@ -1,10 +1,12 @@
+---
 groups:
   - name: charity.sentry
     rules:
       # 1) Sentry exporter looks stale
       # Alert when the last successful 'up' sample for the charity-sentry job is older than 2 minutes.
       - alert: SentryExporterStale
-        expr: time() - max(timestamp(up{job="charity-sentry"})) > 120
+        expr: >
+          max_over_time(push_time_seconds[5m]) < time() - 120
         for: 5m
         labels:
           severity: warning
@@ -35,3 +37,26 @@ groups:
         annotations:
           summary: "Sentry target is DOWN"
           description: "Prometheus reports up=0 for job=charity-sentry for 2m."
+  - name: charity.pipeline
+    rules:
+      # Scribe poison rising
+      - alert: ScribePoisonRising
+        expr: rate(scribe_poison_total[15m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: scribe
+        annotations:
+          summary: "Scribe is quarantining malformed records"
+          description: "scribe_poison_total is increasing (>0 over 15m). Check relics/.queue/poison/."
+
+      # Scribe duplicates rising
+      - alert: ScribeDuplicatesRising
+        expr: rate(scribe_duplicates_total[15m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: scribe
+        annotations:
+          summary: "Scribe is dropping duplicates"
+          description: "scribe_duplicates_total is increasing (>0.1/s over 15m). Verify upstream idempotency."

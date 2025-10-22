@@ -34,7 +34,6 @@ services:
       - A:/Charity/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - A:/Charity/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - A:/Charity/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - A:/Charity/grafana/storage:/var/lib/grafana
     depends_on:
       - prometheus
     restart: unless-stopped

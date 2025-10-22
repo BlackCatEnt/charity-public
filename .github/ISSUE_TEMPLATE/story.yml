@@ -1,0 +1,143 @@
+name: Story
+description: Plan a piece of work for the Charity Hive project
+title: "[Story]: <concise outcome>"
+labels: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to create a shippable story. See the Working Agreement for details.
+
+        • Fields below populate the Project columns (Epic, Area, Priority, Start, Due, Milestone).
+        • Keep scope ≤ 2 days or split.
+
+  - type: input
+    id: why
+    attributes:
+      label: Why (1–2 lines)
+      description: What value or problem does this deliver/fix?
+      placeholder: Connects to Epic goal, metric, or user flow…
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details / Notes
+      description: Context, approach, or references. Keep it brief; link out if long.
+      placeholder: Key idea, approach, constraints…
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Checklist of observable outcomes
+      placeholder: |
+        - [ ] <criterion 1>
+        - [ ] <criterion 2>
+        - [ ] <criterion 3>
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: dod
+    attributes:
+      label: Definition of Done (quick check)
+      options:
+        - label: Code merged (or behind flag)
+        - label: CI green (lint/tests)
+        - label: Telemetry/logs added if meaningful
+        - label: Docs/README/codex note updated
+        - label: Screenshot/demo note if user-facing
+    validations:
+      required: false
+
+  # --- Project field helpers (kept as metadata in the issue body) ---
+  - type: dropdown
+    id: epic
+    attributes:
+      label: Epic
+      options:
+        - Keeper MVP
+        - Scribe MVP
+        - Sentry MVP
+        - Herald MVP
+        - Busy Bee MVP
+        - Kodex Bee MVP
+        - Guard Bee MVP
+        - Muse Bee MVP
+        - Tinker Bee MVP
+        - Architect Bee MVP
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (component)
+      options:
+        - Keeper
+        - Scribe
+        - Sentry
+        - Busy
+        - Kodex
+        - Guard
+        - Muse
+        - Herald
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: input
+    id: start
+    attributes:
+      label: Start date (YYYY-MM-DD)
+      placeholder: "2025-10-16"
+    validations:
+      required: false
+
+  - type: input
+    id: due
+    attributes:
+      label: Due date (YYYY-MM-DD)
+      placeholder: "2025-11-27"
+    validations:
+      required: false
+
+  - type: input
+    id: milestone
+    attributes:
+      label: Milestone (optional)
+      placeholder: e.g., Keeper v0.4 QoS
+    validations:
+      required: false
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Links
+      description: Design docs, dashboards, PRs, related issues
+      placeholder: |
+        - Spec: …
+        - Dashboard: …
+        - Related: #7
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **Labels:** add one of `keeper` `scribe` `sentry` `busybee` `kodex` `obs` and `public` if safe for the mirror.

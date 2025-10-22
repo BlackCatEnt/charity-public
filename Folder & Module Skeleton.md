@@ -6,6 +6,7 @@ A:\Charity\
 .github\
   workflows\
     ci.yml
+    monitoring-ci.yml
 adapters\
   discord.mjs
   twitch.mjs
@@ -70,6 +71,8 @@ heart\
     2025-09-12_tone-casual.json
     README.md
 hive\
+  common\
+    metrics.mjs
   herald\
     index.mjs
   keeper\
@@ -81,6 +84,7 @@ hive\
     qos.mjs
   metrics\
     prom.mjs
+    pushgateway.mjs
   scribe\
     backoff.mjs
     backpressure.mjs
@@ -171,6 +175,11 @@ relics\
     keeper-8131.mjs
     scribe-8132.mjs
     scribe-dev-server.mjs
+  health\
+    pgw-clean.ps1
+    pgw-clear-now.mjs
+  producers\
+    poke-bees.ps1
   prometheus\
     prometheus.yml
     rules\
@@ -178,6 +187,7 @@ relics\
   queue\
     incoming\
   smoke\
+    emit-keeper-file.ps1
     keeper-prom-smoke.mjs
     keeper-requeue-smoke.mjs
     scribe-backpressure-smoke.mjs
@@ -232,3 +242,4 @@ temp\
 trials\
   e2e\
   unit\
+

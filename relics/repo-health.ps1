@@ -6,10 +6,13 @@ $ErrorActionPreference = "Stop"
 Set-Location $Root
 Write-Host "== Repo Health =="
 
-Write-Host "`n[1/4] JSON validity"
+Write-Host "`n[1/4] JSON validity" -ForegroundColor Cyan
 
 # Exclusions (runtime/vendor/archives)
-$exclude = '\\node_modules\\|\\\.git\\|\\Archive\\|\\soul\\memory\\episodes\\|\\soul\\kb\\index\\|\\soul\\cache\\'
+$exclude = '\\node_modules\\|\\\.git\\|\\Archive\\|\\soul\\memory\\episodes\\|\\soul\\kb\\index\\|\\soul\\cache\\' +
+           '|\\relics\\\.queue\\|\\relics\\\.state\\|\\relics\\\.runtime\\|\\relics\\\.cache\\' +
+           '|\\soul\\kb\\' +
+           '|\\package-lock\.json$'
 
 # Gather files
 $JsonFiles  = Get-ChildItem -Path $Root -Recurse -File -Include *.json  | Where-Object { $_.FullName -notmatch $exclude }
@@ -56,7 +59,7 @@ if ($JsonFailed.Count -eq 0 -and $JsonlFailed.Count -eq 0) {
 }
 
 # 2/4 JS syntax check
-Write-Host "`n[2/4] JS syntax check"
+Write-Host "`n[2/4] JS syntax check" -ForegroundColor Cyan
 $badJs = @()
 $jsFiles = Get-ChildItem -Path $Root -Recurse -File -Include *.js,*.mjs | Where-Object { $_.FullName -notmatch $exclude }
 foreach ($f in $jsFiles) {
@@ -68,7 +71,7 @@ foreach ($f in $jsFiles) {
 if (-not $badJs) { Write-Host "OK: no JS parse errors." } else { $badJs | ForEach-Object { Write-Warning "Syntax error: $_" } }
 
 # 3/4 Import resolution
-Write-Host "`n[3/4] Import resolution"
+Write-Host "`n[3/4] Import resolution" -ForegroundColor Cyan
 $auditor = Join-Path $PSScriptRoot "audit_imports.mjs"
 $importExit = 0
 if (Test-Path $auditor) {
@@ -81,7 +84,7 @@ if (Test-Path $auditor) {
 }
 
 # [4/4] Legacy references
-Write-Host "`n[4/4] Legacy references"
+Write-Host "`n[4/4] Legacy references" -ForegroundColor Cyan
 
 # scan only source/docs we actually care about
 $scan = Get-ChildItem -Recurse -File -Include *.mjs,*.js,*.json,*.md |

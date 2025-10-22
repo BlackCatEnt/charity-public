@@ -76,6 +76,12 @@ This workflow boots a local NDJSON ingest server and runs the Scribe smoke scrip
 - Configure: `METRICS_ROLLUP_INTERVAL_MS`, `METRICS_DIR`.
 - Optional fan-out of all Keeper events through Scribe: `SCRIBE_FANOUT=1`.
 
+## Keeper v0.4 metrics → Pushgateway
+Set:
+  SCRIBE_PUSHGATEWAY_URL=http://localhost:9091
+  SCRIBE_PUSHGATEWAY_JOB=keeper
+Prometheus must scrape Pushgateway (already configured in your prometheus.yml).
+
 ## Keeper v0.4 — Queue QoS & Idempotency
 
 **What’s new**
@@ -92,6 +98,21 @@ This workflow boots a local NDJSON ingest server and runs the Scribe smoke scrip
 • DLQ: `relics/.runtime/dlq/` (only for hard fails)
 • Partial-fail safety: on mid-file error, remainder requeued as `requeue-*.jsonl`
 • Probes: `/health`, `/metrics`, `/debug`
+
+### v0.4 QoS quick start
+
+```env
+KEEPER_RPS=20
+KEEPER_BURST=40
+KEEPER_CONCURRENCY=4
+KEEPER_MAX_RETRIES=3
+KEEPER_BACKOFF_MS=120
+KEEPER_BACKOFF_FACTOR=2
+KEEPER_BACKOFF_MAX_MS=3000
+KEEPER_JITTER_PCT=0.25
+KEEPER_CIRCUIT_THRESHOLD=8
+KEEPER_CIRCUIT_COOLDOWN_S=30
+```
 
 **Config via environment**
 KEEPER_METRICS_PORT=8140

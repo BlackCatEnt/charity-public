@@ -15,7 +15,8 @@ import CONFIG from './config.mjs';
 import { createLogger } from './log.mjs';
 import Scribe from '../scribe/index.mjs';
 import { metricsIngest, startMetrics } from "#sentry/metrics/rollup.mjs";
-import { TokenBucket } from "./qos.mjs";
+import { withQoS, tokenBucket } from "./qos.mjs";
+import { metrics } from "../scribe/metrics.mjs";
 import { scribeWriteWithRetry } from "#hive/scribe/index.mjs";
 import { createPushgatewayPusher } from "#hive/metrics/pushgateway.mjs";
 import { m_scribe_write, m_scribe_retry } from "#hive/metrics/prom.mjs";
@@ -30,6 +31,8 @@ import {
 } from '../metrics/prom.mjs';
 let __keeperPgw; // hold pusher for shutdown
 startMetrics();
+
+metrics.setDefaultMetricTags?.({ service: "keeper" });
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -140,6 +143,18 @@ async function* listQueueFiles() {
   for (const name of files) yield path.join(QUEUE_DIR, name);
 }
 
+function ensureEventId(rec) {
+  if (rec && rec.event_id) return rec;
+  const hall = String(rec?.source || rec?.hall || "unknown");
+  const kind = String(rec?.kind || "unknown");
+  // include ts + body-ish to stabilize the hash for “same logical event”
+  const ts   = String(rec?.ts ?? "");
+  const body = JSON.stringify(rec?.body ?? rec ?? {});
+  const raw  = `${hall}|${kind}|${ts}|${body}`;
+  const event_id = crypto.createHash('sha256').update(raw).digest('hex');
+  return { ...rec, event_id };
+}
+
 async function readJsonl(filePath) {
   const raw = await fsp.readFile(filePath, 'utf8');
   const lines = raw.split(/\r?\n/).filter(Boolean);
@@ -192,11 +207,26 @@ async function processFile({ filePath, scribeSend }) {
     // simple token-bucket maps
     const hallBuckets = new Map();
     const beeBuckets = new Map();
-    const mkBucket = (tps=50, cap=100) => new TokenBucket({ tokensPerSec: tps, bucketSize: cap });
-    const getHall = (name) => hallBuckets.get(name) || hallBuckets.set(name, mkBucket( process.env[`RL_${name.toUpperCase()}_TPS`] ? Number(process.env[`RL_${name.toUpperCase()}_TPS`]) : 10,
-                                                                                      process.env[`RL_${name.toUpperCase()}_CAP`] ? Number(process.env[`RL_${name.toUpperCase()}_CAP`]) : 20 )).get(name);
-    const getBee  = (name) => beeBuckets.get(name)  || beeBuckets.set(name,  mkBucket( process.env[`RL_BEE_${name.toUpperCase()}_TPS`] ? Number(process.env[`RL_BEE_${name.toUpperCase()}_TPS`]) : 10,
-                                                                                      process.env[`RL_BEE_${name.toUpperCase()}_CAP`] ? Number(process.env[`RL_BEE_${name.toUpperCase()}_CAP`]) : 20 )).get(name);
+    const mkBucket = (tps = 50, cap = 100) => {
+      const allow = tokenBucket({ capacity: cap, refillPerSec: tps });
+      return () => allow();
+    };
+    const getHall = (name) => {
+      if (!hallBuckets.has(name)) {
+        const tps = process.env[`RL_${name.toUpperCase()}_TPS`] ? Number(process.env[`RL_${name.toUpperCase()}_TPS`]) : 10;
+        const cap = process.env[`RL_${name.toUpperCase()}_CAP`] ? Number(process.env[`RL_${name.toUpperCase()}_CAP`]) : 20;
+        hallBuckets.set(name, mkBucket(tps, cap));
+      }
+      return hallBuckets.get(name);
+    };
+    const getBee = (name) => {
+      if (!beeBuckets.has(name)) {
+        const tps = process.env[`RL_BEE_${name.toUpperCase()}_TPS`] ? Number(process.env[`RL_BEE_${name.toUpperCase()}_TPS`]) : 10;
+        const cap = process.env[`RL_BEE_${name.toUpperCase()}_CAP`] ? Number(process.env[`RL_BEE_${name.toUpperCase()}_CAP`]) : 20;
+        beeBuckets.set(name, mkBucket(tps, cap));
+      }
+      return beeBuckets.get(name);
+    };
 
     i = 0;
     for (; i < records.length; i++) {
@@ -215,7 +245,9 @@ async function processFile({ filePath, scribeSend }) {
       const maxWait = Number(process.env.RL_MAX_WAIT_MS || 5000); // 5s default
       const step    = 50;  // 50ms polling step
       let waited = 0;
-      while (!(getHall(hall).allow(1) && getBee(bee).allow(1))) {
+      const hallAllow = getHall(hall);
+      const beeAllow = getBee(bee);
+      while (!(hallAllow() && beeAllow())) {
         _qos.rateLimitHits++;
         if (waited >= maxWait) {
           // AFTER waiting long enough, don't fail the whole file:
@@ -227,7 +259,7 @@ async function processFile({ filePath, scribeSend }) {
         waited += step;
       }
       const t0 = performance.now();
-      const ok = await withRetries(() => scribeSend(rec), { tries: 5, baseMs: 100, maxMs: 1500 });
+      const ok = await withRetries(() => scribeSend(ensureEventId(rec)), { tries: 5, baseMs: 100, maxMs: 1500 });
       if (!ok) throw new Error('scribeSend returned false');
       // Count successful processing
       m_keeper_processed.inc({ hall, kind, result: 'ok' }, 1);
@@ -272,10 +304,13 @@ async function processFile({ filePath, scribeSend }) {
     };
 
     // 1) try to requeue what we didn't process
-    const requeued = await (async () => { try { return await requeueRemainder(); } catch { return false; } })();
+    let requeued = false;
+    try {
+      requeued = await requeueRemainder();
+    } catch {/* non-fatal */}
     emitErrorMetrics();
     status = "failed";
-    if (requeued) return status;      // partial failure handled — do NOT DLQ whole file
+    if (requeued) return status;  // partial failure handled — do NOT DLQ whole file
 
     // 2) full failure: copy to DLQ for visibility
     try {
@@ -485,14 +520,60 @@ async function scanAndProcessOnce() {
 
 const scribe = new Scribe({ logger: log }); // simulate=auto by default
 
+const qosConfig = {
+  rps: Number(process.env.KEEPER_RPS ?? 20),
+  burst: Number(process.env.KEEPER_BURST ?? 40),
+  concurrency: Number(process.env.KEEPER_CONCURRENCY ?? 4),
+  maxRetries: Number(process.env.KEEPER_MAX_RETRIES ?? 3),
+  backoff: {
+    baseMs: Number(process.env.KEEPER_BACKOFF_MS ?? 120),
+    factor: Number(process.env.KEEPER_BACKOFF_FACTOR ?? 2),
+    maxMs: Number(process.env.KEEPER_BACKOFF_MAX_MS ?? 3000),
+    jitterPct: Number(process.env.KEEPER_JITTER_PCT ?? 0.25),
+  },
+  circuit: {
+    failureThreshold: Number(process.env.KEEPER_CIRCUIT_THRESHOLD ?? 8),
+    cooldownSec: Number(process.env.KEEPER_CIRCUIT_COOLDOWN_S ?? 30),
+  },
+};
+
+async function handleTask(task) {
+  const ok = await scribe.send({ ...task, ts: Date.now() });
+  log.info('scribe.metrics', { ...scribe.metrics });
+  return ok;
+}
+
+const qos = withQoS(handleTask, qosConfig);
+
+const handleQoSDrain = () => {
+  qos.stop();
+  _stopRequested = true;
+  if (typeof metrics.flush === 'function') {
+    metrics.flush().catch(() => {});
+  }
+};
+
+process.on('SIGINT', handleQoSDrain);
+process.on('SIGTERM', handleQoSDrain);
+
 async function run() {
   log.info('keeper.start', { interval_ms: CONFIG.INTERVAL_MS });
-  while (true) {
+  while (!_stopRequested) {
     const batch = await scanAndProcessOnce();
     for (const rec of batch) {
-      const ok = await scribe.send({ ...rec, ts: Date.now() });
-      log.info('scribe.metrics', { ...scribe.metrics });
+      if (_stopRequested) break;
+      try {
+        await qos.run(rec);
+      } catch (err) {
+        if (err?.message === 'draining') {
+          _stopRequested = true;
+          break;
+        }
+        log.warn('keeper.qos.error', { message: err?.message ?? String(err) });
+      }
     }
+    try { await metrics.flush(); } catch {}
+    if (_stopRequested) break;
     await delay(CONFIG.INTERVAL_MS);
   }
 }
